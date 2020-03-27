@@ -1,6 +1,7 @@
 import os
 import random
 import math
+import argparse
 from itertools import count
 from collections import deque
 
@@ -12,26 +13,33 @@ from torch.nn import functional as F
 import gym
 
 from tensorboard_logger import TensorboardLogger
-from utils import get_logger, compare_weights
+from utils import get_logger, compare_weights, load_json
 
 
 logger = get_logger('dqn.py', fh_lv='debug', ch_lv='info')
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name', '-n', required=True, type=str, help='name of experiment')
+    args = parser.parse_args()
+
+    experiment_name = args.name
+    hyparams = load_json('./hyparams/dqn_hyparams.json')[experiment_name]['hyparams']
     # hyparameters
-    lr = 0.001
-    buffer_size = 10000
-    gamma = 0.999
-    epsilon_start = 0.9
-    epsilon_end = 0.05
-    decay_factor = 200.0
-    batch_size = 16
-    replay_freq = 4
-    target_update_freq = 100
-    episodes = 100000
-    warmup_steps = 1000
+    lr = hyparams['lr']
+    buffer_size = hyparams['buffer_size']
+    gamma = hyparams['gamma']
+    epsilon_start = hyparams['epsilon_start']
+    epsilon_end = hyparams['epsilon_end']
+    decay_factor = hyparams['decay_factor']
+    batch_size = hyparams['batch_size']
+    replay_freq = hyparams['replay_freq']
+    target_update_freq = hyparams['target_update_freq'] 
+    episodes = hyparams['episodes']
+    warmup_steps = hyparams['warmup_steps']
     # max_steps = 1e10
+    logger.debug('experiment_name: {} hyparams: {}'.format(experiment_name, hyparams))
 
     # write to tensorboard 
     tensorboard_logdir = './experiment'
@@ -82,6 +90,7 @@ def main():
                 # 1. test replay_bufer 
                 # logger.debug('step: {} number of samples in bufer: {} sample: {}'.format(step, len(agent.replay_buffer), agent.replay_buffer.get_batch(2)))
                 agent.update_target_network()
+            agent.epsilon_decay()
             state = next_state  # update state manually
             global_steps += 1
             if done:
@@ -174,8 +183,8 @@ class DQNAgent(object):
             param.grad.data.clamp(-1, 1)  # gradient cliping |grad| < = 1
         self.optimizer.step()
 
-        self.steps_done += 1  # train step + 1
-        self.epsilon_decay()
+        # self.steps_done += 1  # train step + 1
+        # self.epsilon_decay()
 
         return loss.item()
 
@@ -203,6 +212,7 @@ class DQNAgent(object):
         self.target_network.load_state_dict(self.policy_network.state_dict())
         
     def epsilon_decay(self):
+        self.steps_done += 1
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * math.exp(-1 * self.steps_done / self.decay_factor)
         # print('steps_done: {}'.format(self.steps_done))
         # print('epsilon: {}'.format(self.epsilon))

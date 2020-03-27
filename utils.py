@@ -1,4 +1,5 @@
 import math
+import json
 import logging
 from logging import FileHandler, StreamHandler, Formatter
 import os
@@ -41,3 +42,9 @@ def compare_weights(model1, model2):
 
 def sigmoid_clipping(x, beta=1.0):
     return 1 / (1 + math.exp(-beta * x))
+
+
+def load_json(json_path):
+    with open(json_path, 'r') as f:
+        json_dict = json.load(f)
+    return json_dict
