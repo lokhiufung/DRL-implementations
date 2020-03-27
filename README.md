@@ -19,7 +19,7 @@ pip install -e .
 1. set hyparams in "hyparams" folder
 2. run script, e.g
 ```
-python dqn --name=dqn-01
+python dqn.py --name=dqn-01
 ```
 3. run the following to check tensorboard
 ```
