@@ -7,26 +7,10 @@
             "epsilon_start": 0.9,
             "epsilon_end": 0.05,
             "decay_factor": 200.0,
-            "batch_size": 16,
-            "replay_freq": 4,
-            "target_update_freq": 10000,
-            "episodes": 10000000,
-            "warmup_steps": 10000
-        },
-        "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
-    },
-    "dqn-02": {
-        "hyparams": {
-            "lr": 0.001,
-            "buffer_size": 10000,
-            "gamma": 0.999,
-            "epsilon_start": 0.9,
-            "epsilon_end": 0.05,
-            "decay_factor": 200.0,
             "batch_size": 32,
             "replay_freq": 4,
-            "target_update_freq": 10000,
-            "episodes": 10000000,
+            "target_update_freq": 100,
+            "episodes": 100000,
             "warmup_steps": 10000
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"

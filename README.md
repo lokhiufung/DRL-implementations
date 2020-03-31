@@ -2,6 +2,15 @@
 Implementation of DRL algorithms for solving gym environments. Setup dependencies by installing spinningup. There are baseline implementations of some DRL algorithms in spinningup. 
 
 
+## install torchviz for visualizing computation graph
+```
+sudo apt update
+sudo apt-get install graphviz
+
+pip install torchviz
+```
+
+
 ## install spinningup
 install openMPI
 ```
@@ -34,7 +43,18 @@ tensorboard --logdir=./experiment
 3. check DQNAgent; (DONE) replay(), (DONE) greedy_infer(), (DONE) epsilon_greedy_infer(), (DONE) remember(), (DONE) update_target_network()
 4. debug training; loss exploded, q value exploded
 5. try a range of target_update_freq
+6. add logger to DQNAgent
+
+
+### a3c.py
+1. actor network
+2. policy network
+
 
 ### general
-2. (DONE) tensorboard_logger for logging training process
+1. (DONE) tensorboard_logger for logging training process
+2. log grads, weights of each layers
 
+
+## remarks
+- plotting_utils.py modified from https://github.com/NVIDIA/tacotron2/blob/dd49ffa85085d33f5c9c6cb6dc60ad78aa00fc04/logger.py

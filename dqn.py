@@ -50,9 +50,10 @@ def main():
     env = gym.make('CartPole-v0')
     env.reset()
     # logger.debug('observation_space.shape: {}'.format(env.observation_space.shape))
-    agent = DQNAgent(buffer_size, input_dim=env.observation_space.shape[0], output_dim=env.action_space.n, gamma=gamma, epsilon_start=epsilon_start, epsilon_end=epsilon_end, decay_factor=decay_factor)
+    agent = DQNAgent(buffer_size, writer=writer, input_dim=env.observation_space.shape[0], output_dim=env.action_space.n, gamma=gamma, epsilon_start=epsilon_start, epsilon_end=epsilon_end, decay_factor=decay_factor)
 
     state, _, _, _ = env.step(env.action_space.sample()) # take a random action to start with
+    writer.add_graph(agent.policy_network, torch.tensor([state], dtype=torch.float32))  # add model graph to tensorboard
     # state, reward, done, info = env.step(env.action_space.sample()) # take a random action to start with
     # for i in range(50):
     #     agent.remember(state, reward, env.action_space.sample(), state, False)
@@ -80,16 +81,18 @@ def main():
             # print('state: {} reward: {} action_tensor.item(): {} next_state: {} done: {}'.format(state, reward, action_tensor.item(), next_state, done))
             score += reward
             # experience replay
-            if global_steps > max(batch_size, warmup_steps) and step % replay_freq == 0:
+            if global_steps > max(batch_size, warmup_steps) and global_steps % replay_freq == 0:
                 loss = agent.replay(batch_size)
                 total_loss += loss
                 logger.debug('episode: {} done: {} global_steps: {} loss: {}'.format(episode, done, global_steps, loss))
                 writer.log_training(global_steps, loss, agent.lr, value_tensor.item(), target_value_tensor.item(), agent.epsilon)
             # update target_network 
-            if global_steps > max(batch_size, warmup_steps) and step % target_update_freq == 0:
+            if global_steps > max(batch_size, warmup_steps) and global_steps % target_update_freq == 0:
                 # 1. test replay_bufer 
                 # logger.debug('step: {} number of samples in bufer: {} sample: {}'.format(step, len(agent.replay_buffer), agent.replay_buffer.get_batch(2)))
                 agent.update_target_network()
+            if global_steps > max(batch_size, warmup_steps) and global_steps % 1000:
+                writer.log_linear_weights(global_steps, 'encoder.0.weight', agent.policy_network.get_weights()['encoder.0.weight'])
             agent.epsilon_decay()
             state = next_state  # update state manually
             global_steps += 1
@@ -107,13 +110,24 @@ class QNetwork(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(QNetwork, self).__init__()
         self.output_dim = output_dim
-        self.encoder = torch.nn.Linear(input_dim, 128)
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
         self.output_layer = torch.nn.Linear(128, self.output_dim)
 
     def forward(self, x):
-        x = F.relu(self.encoder(x))
+        x = self.encoder(x)
         x = self.output_layer(x)  # linear outputs correspond to q-value of each action
         return x
+
+    def get_weights(self):
+        weights = dict() 
+        for name, param in self.named_parameters():
+            weights[name] = param.detach().cpu().numpy()
+        return weights
 
 
 class ReplayBuffer(object):
@@ -133,7 +147,7 @@ class ReplayBuffer(object):
 
         
 class DQNAgent(object):
-    def __init__(self, buffer_size, input_dim, output_dim, mode='train', gamma=0.9, epsilon_start=0.9, epsilon_end=0.05, decay_factor=200.0, lr=0.001):
+    def __init__(self, buffer_size, input_dim, output_dim, writer, mode='train', gamma=0.9, epsilon_start=0.9, epsilon_end=0.05, decay_factor=200.0, lr=0.001):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.buffer_size = buffer_size
@@ -149,6 +163,8 @@ class DQNAgent(object):
         self.epsilon_end = epsilon_end
         self.steps_done = 0
         self.decay_factor = decay_factor
+        # tensorboard writer
+        self.writer = writer
         self.target_network.eval()
         # synchronize the weights in both policy and target network
         self.update_target_network()
@@ -179,14 +195,16 @@ class DQNAgent(object):
         self.optimizer.zero_grad()
         loss.backward()
         # gradient clipping, (-1, 1)
+        # grad_norm = 0.0
         for param in self.policy_network.parameters():
-            param.grad.data.clamp(-1, 1)  # gradient cliping |grad| < = 1
+            param.grad.data.clamp_(-1, 1)  # gradient cliping |grad| < = 1, clamp_ in-place original tensor, .data to get underlying tensor of a variable
+            # grad_norm += param.grad.data.norm().item()**2 
+        # self.writer.log_training(self.steps_done, loss, agent.lr, value_tensor.item(), target_value_tensor.item(), agent.epsilon)  # temp: self.steps_done == global_steps
         self.optimizer.step()
-
         # self.steps_done += 1  # train step + 1
         # self.epsilon_decay()
 
-        return loss.item()
+        return loss.item()#, grad_norm**0.5
 
     def greedy_infer(self, state):
         with torch.no_grad():
