@@ -47,8 +47,9 @@ tensorboard --logdir=./experiment
 
 
 ### a3c.py
-1. actor network
-2. policy network
+1. check if clip_grad_norm_ works 
+2. check if step() correctly applied on model
+3. prob_tensor becomes nan after several steps
 
 
 ### general

@@ -98,7 +98,7 @@ def main():
             global_steps += 1
             if done:
                 logger.info('episode done! episode: {} score: {}'.format(episode, score))
-                writer.log_episode(episode, total_loss / (step + 1), score)
+                writer.log_episode(episode, score, total_loss / (step + 1))
                 break
             # logger.debug('state_tensor: {} action_tensor: {} value_tensor: {}'.format(state_tensor, action_tensor, value_tensor))
             # logger.debug('output: {} state_tensor: {} state: {}'.format(output, state_tensor, state))

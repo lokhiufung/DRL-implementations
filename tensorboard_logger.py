@@ -22,6 +22,7 @@ class TensorboardLogger(SummaryWriter):
         """
         self.add_image(name, plot_weights_to_numpy(weights), global_step=steps, dataformats='HWC')
 
-    def log_episode(self, episode, avg_loss, score):
+    def log_episode(self, episode, score, avg_loss=None):
         self.add_scalar('Episode/score', score, episode)
-        self.add_scalar('Episode/avg_loss', avg_loss, episode)
+        if avg_loss:
+            self.add_scalar('Episode/avg_loss', avg_loss, episode)
