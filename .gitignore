@@ -138,5 +138,6 @@ dmypy.json
 .vscode
 training
 log
-experiment
+experiments
 test.py
+test2.py

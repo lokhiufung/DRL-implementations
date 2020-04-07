@@ -41,9 +41,10 @@ tensorboard --logdir=./experiment
 1. check ReplayBuffer; (DONE) append(), (DONE) get_batch(), (DONE) __len__()
 2. check QNetwork; (DONE) forward()
 3. check DQNAgent; (DONE) replay(), (DONE) greedy_infer(), (DONE) epsilon_greedy_infer(), (DONE) remember(), (DONE) update_target_network()
-4. debug training; loss exploded, q value exploded
+4. (DONE) debug training; loss exploded, q value exploded (mistakenly flipped the sign of choosing random action in epsilon_greedy_infer)
 5. try a range of target_update_freq
 6. add logger to DQNAgent
+7. hyparameters tuning 
 
 
 ### a3c.py
@@ -59,3 +60,4 @@ tensorboard --logdir=./experiment
 
 ## remarks
 - plotting_utils.py modified from https://github.com/NVIDIA/tacotron2/blob/dd49ffa85085d33f5c9c6cb6dc60ad78aa00fc04/logger.py
+- [ dqn ] loss boosts up everytime after target update; score may drop after many steps; loss may increase after many steps; very unstable

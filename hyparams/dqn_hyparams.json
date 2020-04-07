@@ -3,15 +3,15 @@
         "hyparams": {
             "lr": 0.001,
             "buffer_size": 10000,
-            "gamma": 0.999,
+            "gamma": 0.99,
             "epsilon_start": 0.9,
             "epsilon_end": 0.05,
-            "decay_factor": 200.0,
-            "batch_size": 32,
-            "replay_freq": 4,
+            "decay_factor": 100.0,
+            "batch_size": 128,
+            "replay_freq": 1,
             "target_update_freq": 100,
-            "episodes": 100000,
-            "warmup_steps": 10000
+            "episodes": 5000,
+            "warmup_steps": 128
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
     }

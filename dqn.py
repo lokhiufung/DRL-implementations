@@ -22,10 +22,18 @@ logger = get_logger('dqn.py', fh_lv='debug', ch_lv='info')
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', '-n', required=True, type=str, help='name of experiment')
+    parser.add_argument('--render', action='store_true', help='render gym')
     args = parser.parse_args()
 
     experiment_name = args.name
+    is_render = args.render
+
     hyparams = load_json('./hyparams/dqn_hyparams.json')[experiment_name]['hyparams']
+    # make checkpoint path
+    experiment_logdir = 'experiments/{}'.format(experiment_name)
+    if not os.path.exists(experiment_logdir):
+        os.makedirs(experiment_logdir)
+
     # hyparameters
     lr = hyparams['lr']
     buffer_size = hyparams['buffer_size']
@@ -42,7 +50,7 @@ def main():
     logger.debug('experiment_name: {} hyparams: {}'.format(experiment_name, hyparams))
 
     # write to tensorboard 
-    tensorboard_logdir = './experiment'
+    tensorboard_logdir = '{}/tensorboard'.format(experiment_logdir)
     if not os.path.exists(tensorboard_logdir):
         os.mkdir(tensorboard_logdir)
     writer = TensorboardLogger(logdir=tensorboard_logdir)
@@ -66,10 +74,16 @@ def main():
         total_loss = 0.0
         env.reset()
         logger.debug('env.reset() episode {} starts!'.format(episode))
+        # update target_network 
+        if episode % target_update_freq == 0:
+            # 1. test replay_bufer 
+            # logger.debug('step: {} number of samples in bufer: {} sample: {}'.format(step, len(agent.replay_buffer), agent.replay_buffer.get_batch(2)))
+            agent.update_target_network()
         for step in count():
-            # env.render()
+            if is_render:
+                env.render()
             action_tensor, value_tensor = agent.epsilon_greedy_infer(torch.tensor([state], dtype=torch.float32))
-            _, target_value_tensor = agent.greedy_infer(torch.tensor([state], dtype=torch.float32))  # temp: for debug
+            target_value_tensor = agent.evaluate_state(torch.tensor([state], dtype=torch.float32))  # temp: for debug
             next_state, reward, done, info = env.step(action_tensor.item()) # take a random action
             # action = env.action_space.sample()
             # next_state, reward, done, info = env.step(action) # take a random action
@@ -85,38 +99,43 @@ def main():
                 loss = agent.replay(batch_size)
                 total_loss += loss
                 logger.debug('episode: {} done: {} global_steps: {} loss: {}'.format(episode, done, global_steps, loss))
-                writer.log_training(global_steps, loss, agent.lr, value_tensor.item(), target_value_tensor.item(), agent.epsilon)
-            # update target_network 
-            if global_steps > max(batch_size, warmup_steps) and global_steps % target_update_freq == 0:
-                # 1. test replay_bufer 
-                # logger.debug('step: {} number of samples in bufer: {} sample: {}'.format(step, len(agent.replay_buffer), agent.replay_buffer.get_batch(2)))
-                agent.update_target_network()
-            if global_steps > max(batch_size, warmup_steps) and global_steps % 1000:
-                writer.log_linear_weights(global_steps, 'encoder.0.weight', agent.policy_network.get_weights()['encoder.0.weight'])
+                writer.log_training(global_steps, loss, agent.lr, value_tensor.item(), target_value_tensor.item())
+            writer.add_scalar('epsilon', agent.epsilon, global_steps)  # FIXME
+            
+            
+            # if global_steps > max(batch_size, warmup_steps) and global_steps % 1000:
+            #     writer.log_linear_weights(global_steps, 'encoder.0.weight', agent.policy_network.get_weights()['encoder.0.weight'])
             agent.epsilon_decay()
             state = next_state  # update state manually
             global_steps += 1
             if done:
                 logger.info('episode done! episode: {} score: {}'.format(episode, score))
                 writer.log_episode(episode, score, total_loss / (step + 1))
+                # save checkpoints
+                if global_steps > max(batch_size, warmup_steps) and episode % 100 == 0:
+                    agent.save_checkpoint(experiment_logdir)
                 break
-            # logger.debug('state_tensor: {} action_tensor: {} value_tensor: {}'.format(state_tensor, action_tensor, value_tensor))
-            # logger.debug('output: {} state_tensor: {} state: {}'.format(output, state_tensor, state))
-            # agent.remember(state, reward, action, next_state, done)
+                # logger.debug('state_tensor: {} action_tensor: {} value_tensor: {}'.format(state_tensor, action_tensor, value_tensor))
+                # logger.debug('output: {} state_tensor: {} state: {}'.format(output, state_tensor, state))
+                # agent.remember(state, reward, action, next_state, done)
+                
     env.close()
 
 
 class QNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, hidden_dim=64):
         super(QNetwork, self).__init__()
+        self.input_dim = input_dim
         self.output_dim = output_dim
+        self.hidden_dim = hidden_dim
+
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 128),
+            nn.Linear(self.input_dim, self.hidden_dim),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(self.hidden_dim, self.hidden_dim),
             nn.ReLU()
         )
-        self.output_layer = torch.nn.Linear(128, self.output_dim)
+        self.output_layer = torch.nn.Linear(self.hidden_dim, self.output_dim)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -206,6 +225,14 @@ class DQNAgent(object):
 
         return loss.item()#, grad_norm**0.5
 
+    def evaluate_state(self, state):
+        """
+        evaluate a state with target_network
+        """
+        with torch.no_grad():
+            target_value = self.target_network(state).max(1)[0].view(1, 1)
+        return target_value
+
     def greedy_infer(self, state):
         with torch.no_grad():
             # pytorch doc: Returns a namedtuple (values, indices) where values is the maximum value of each row of the input tensor in the given dimension dim
@@ -219,7 +246,7 @@ class DQNAgent(object):
         action, value = self.greedy_infer(state)
         random_number = random.random()
         # print('random_number: {} epsilon: {}'.format(random_number, self.epsilon))
-        if random_number > self.epsilon:
+        if random_number < self.epsilon:
             action = torch.tensor([[random.randrange(self.output_dim)]], dtype=torch.long)
         return action, value
 
