@@ -65,3 +65,4 @@ RuntimeError: invalid multinomial distribution (encountering probability entry <
 ## remarks
 - plotting_utils.py modified from https://github.com/NVIDIA/tacotron2/blob/dd49ffa85085d33f5c9c6cb6dc60ad78aa00fc04/logger.py
 - [ dqn ] loss boosts up everytime after target update; score may drop after many steps; loss may increase after many steps; very unstable
+- [ a3c ] no improvement in early epidsodes; very unstable

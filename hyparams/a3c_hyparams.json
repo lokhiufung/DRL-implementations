@@ -1,8 +1,8 @@
 {
     "a3c-01": {
         "hyparams": {
-            "lr": 0.001,
-            "beta": 0.001,
+            "lr": 0.01,
+            "beta": 0.01,
             "gamma": 0.99,
             "num_actors": 8,
             "max_steps": 5,
