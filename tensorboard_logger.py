@@ -16,6 +16,13 @@ class TensorboardLogger(SummaryWriter):
         if epsilon:
             self.add_scalar('epsilon', epsilon, steps)
     
+    def log_training_v2(self, iteration, train_data):
+        """
+        train_data: dict, key is name of data 
+        """
+        for key, value in train_data.items():
+            self.add_scalar(key, value, iteration)
+
     def log_linear_weights(self, steps, name, weights):
         """
         weights: numpy array

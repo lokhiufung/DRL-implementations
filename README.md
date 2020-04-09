@@ -51,6 +51,10 @@ tensorboard --logdir=./experiment
 1. check if clip_grad_norm_ works 
 2. check if step() correctly applied on model
 3. prob_tensor becomes nan after several steps
+4.   File "a3c.py", line 66, in train
+    action_tensor = prob_tensor.multinomial(num_samples=1).detach()
+RuntimeError: invalid multinomial distribution (encountering probability entry < 0)
+
 
 
 ### general
