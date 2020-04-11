@@ -1,0 +1,19 @@
+{
+    "nec-01": {
+        "hyparams": {
+            "lr": 0.001,
+            "buffer_size": 10000,
+            "capacity": 1000,
+            "gamma": 0.99,
+            "epsilon_start": 0.9,
+            "epsilon_end": 0.05,
+            "decay_factor": 100.0,
+            "batch_size": 32,
+            "replay_freq": 1,
+            "memory_update_freq": 100,
+            "episodes": 5000,
+            "warmup_steps": 128
+        },
+        "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
+    }
+}

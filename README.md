@@ -56,6 +56,12 @@ tensorboard --logdir=./experiment
 RuntimeError: invalid multinomial distribution (encountering probability entry < 0)
 
 
+### nec.py
+1. dnd
+2. how to update dnd
+3. how to replay
+4. try a more efficient way to accumulate n_steps_q
+
 
 ### general
 1. (DONE) tensorboard_logger for logging training process
