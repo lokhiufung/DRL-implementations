@@ -16,7 +16,7 @@ from tensorboard_logger import TensorboardLogger
 from utils import get_logger, compare_weights, load_json
 
 
-logger = get_logger('dqn.py', fh_lv='debug', ch_lv='info')
+logger = get_logger('dqn', fh_lv='debug', ch_lv='info')
 
 
 def main():

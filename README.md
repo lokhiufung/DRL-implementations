@@ -61,14 +61,20 @@ RuntimeError: invalid multinomial distribution (encountering probability entry <
 2. how to update dnd
 3. how to replay
 4. try a more efficient way to accumulate n_steps_q
+5. use kdtree to find nearest neighbor
+6. set similarity_threshold/alpha for table update
+7. 
 
 
 ### general
 1. (DONE) tensorboard_logger for logging training process
-2. log grads, weights of each layers
+2. log grads, weights of each layers  
 
 
 ## remarks
 - plotting_utils.py modified from https://github.com/NVIDIA/tacotron2/blob/dd49ffa85085d33f5c9c6cb6dc60ad78aa00fc04/logger.py
 - [ dqn ] loss boosts up everytime after target update; score may drop after many steps; loss may increase after many steps; very unstable
 - [ a3c ] no improvement in early epidsodes; very unstable
+- [ nec ] nec should start with random warmup steps to make sure that there are experiences in each dnd
+- [ nec ] set root mean square of diff (over dimensions) to get similarity_threshold (~238 for diff=0.01)
+- [ nec ] it is not possible to use DND alone. The projected vector with a randomly initized weights do not preserve the same neighbors in original space and in projected space. The keys (projected vectors) queried do not preserve the same group of neighors in raw state space. Therefore, the aggregated values may not be appropriate. (values are mixed with 'fake-neighbors') 

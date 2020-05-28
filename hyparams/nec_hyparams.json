@@ -3,7 +3,7 @@
         "hyparams": {
             "lr": 0.001,
             "buffer_size": 10000,
-            "capacity": 1000,
+            "capacity": 100000,
             "gamma": 0.99,
             "epsilon_start": 0.9,
             "epsilon_end": 0.05,
@@ -11,8 +11,12 @@
             "batch_size": 32,
             "replay_freq": 1,
             "memory_update_freq": 100,
+            "p": 50,
+            "similarity_threshold": 900.0,
+            "alpha": 0.1,
             "episodes": 5000,
-            "warmup_steps": 128
+            "warmup_steps": 1000,
+            "horizon": 5
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
     }
