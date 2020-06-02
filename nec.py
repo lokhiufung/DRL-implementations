@@ -140,6 +140,9 @@ class ReplayBuffer(object):
 
 
 class DND(object):
+    """
+    differentiable neural dictionary; should  be differentiable
+    """
     def __init__(self, encode_dim, capacity, p=50, similarity_threshold=238.0, alpha=0.5):
         self.encode_dim = encode_dim
         self.capacity = capacity
@@ -272,8 +275,8 @@ class NECAgent(object):
         self.encoder = Encoder(self.input_dim, self.encode_dim, self.hidden_dim)
         # one dnd one one action; query by index of a list
         self.dnd_list = [DND(self.encode_dim, self.capacity, self.p, self.similarity_threshold, self.alpha) for _ in range(self.output_dim)]
-        self.replay_buffer = ReplayBuffer(max_size=self.buffer_size)
 
+        self.replay_buffer = ReplayBuffer(max_size=self.buffer_size)
         self.optimizer = RMSprop(self.encoder.parameters(), lr=self.lr)
 
     def greedy_infer(self, state):
@@ -306,10 +309,7 @@ class NECAgent(object):
         for i, dnd in enumerate(self.dnd_list):
             n_steps_q[i] = dnd.get_expected_n_steps_q(encoded_state)
         values = torch.tensor(n_steps_q[actions], dtype=torch.float32)  ## part of computation graph
-        print(values)
-        print(expected_next_values)
         loss = F.mse_loss(values, expected_next_values)
-        print(loss)
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 1)
