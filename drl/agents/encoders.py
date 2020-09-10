@@ -3,7 +3,7 @@ from torch import nn
 
 class FullyConnectedEncoder(nn.Module):
     def __init__(self, input_dim, encode_dim, hidden_dim=64):
-        super(Encoder, self).__init__()
+        super(FullyConnectedEncoder, self).__init__()
         self.input_dim = input_dim
         self.encode_dim = encode_dim
         self.hidden_dim = 64

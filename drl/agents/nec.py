@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch.optim import RMSprop
 
+from agents.encoders import FullyConnectedEncoder
 from agents.parts import DND
 from agents.parts import ReplayBuffer
 
@@ -30,17 +31,38 @@ class NECAgent(object):
         self.similarity_threshold = similarity_threshold
         self.alpha = alpha
         
-        self.encoder = Encoder(self.input_dim, self.encode_dim, self.hidden_dim)
+        self.encoder = FullyConnectedEncoder(self.input_dim, self.encode_dim, self.hidden_dim)
         # one dnd one one action; query by index of a list
         self.dnd_list = [DND(self.encode_dim, self.capacity, self.p, self.similarity_threshold, self.alpha) for _ in range(self.output_dim)]
 
         self.replay_buffer = ReplayBuffer(max_size=self.buffer_size)
         self.optimizer = RMSprop(self.encoder.parameters(), lr=self.lr)
 
+    @staticmethod
+    def _ensure_tensor(input_):
+        """
+        all inputs that comes into the object must pass through this pipe first 
+        
+        return Tensor
+        """
+        if isinstance(input_, np.ndarray):
+            input_ = torch.from_numpy(input_).float().unsqueeze(0)
+        return input_
+
+    def encode_state(self, state, return_tensor=False):
+        """
+        encode state
+        """
+        state = self._ensure_tensor(state)
+        with torch.no_grad():
+            encoded_state = self.encoder(state)
+        if not return_tensor:
+            encoded_state = encoded_state.cpu().numpy()
+        return encoded_state
+
     def greedy_infer(self, state, return_tensor=False):
         # n_steps_q = torch.zeros(self.output_dim, dtype=torch.float32)
-        if isinstance(state, np.ndarray):
-            state = torch.from_numpy(state).float().unsqueeze(0)
+        state = self._ensure_tensor(state)
         with torch.no_grad():
             encoded_state = self.encoder(state)
         # n_steps_q = []
@@ -48,9 +70,8 @@ class NECAgent(object):
         #     n_step_q.append(
         #         dnd.get_expected_n_steps_q(encoded_state)
         #         )
-        n_steps_q = torch.zeros(
-            [dnd.get_expected_n_steps_q(encoded_state) for dnd in self.dnd_list],
-            dtype=torch.float32
+        n_steps_q = torch.cat(
+            [dnd.get_expected_n_steps_q(encoded_state) for dnd in self.dnd_list]
         )
         # n_steps_q = torch.zeros(n_steps_q, dtype=torch.float32)
         max_output = n_steps_q.max(0) 
@@ -78,11 +99,10 @@ class NECAgent(object):
 
         # computation graph        
         encoded_state = self.encoder(states)
-        n_steps_q = torch.zeros(
-            [dnd.get_expected_n_steps_q(encoded_state) for dnd in self.dnd_list],
-            dtype=torch.float32
+        n_steps_q = torch.cat(
+            [dnd.get_expected_n_steps_q(encoded_state) for dnd in self.dnd_list]
         )
-        values = torch.tensor(n_steps_q[actions], dtype=torch.float32)  ## part of computation graph
+        values = n_steps_q[actions]  ## part of computation graph
         loss = F.mse_loss(values, expected_next_values)
         self.optimizer.zero_grad()
         loss.backward()
@@ -106,6 +126,16 @@ class NECAgent(object):
         self.steps_done += 1
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * math.exp(-1 * self.steps_done / self.decay_factor)
 
+    def save_encoder(self, output_dir):
+        pass
+
     def save_dnd(self, output_dir):
-        for index, dnd in enumerate(self.dnd_list):
-            dnd.save(output_dir, index)
+        for id_, dnd in enumerate(self.dnd_list):
+            dnd.save(output_dir, id_)
+
+    def load_encoder(self, checkpoint_dir):
+        pass
+
+    def load_dnd(self, checkpoint_dir):
+        for id_, dnd in enumerate(self.dnd_list):
+            dnd.load(checkpoint_dir, id_)
