@@ -3,9 +3,10 @@ from torch import nn
 
 class Module:
     """
-    Basic unit of agent
+    Conceptual blocks of an agent's brain
     """
         
+
 class NonTranableModule(Module):
     """
     Module with no trainable weights
@@ -57,3 +58,5 @@ class TorchTrainableModule(TrainableModule, nn.Module):
 
     def _get_weigths(self):
         return self.model_parameters()
+
+
