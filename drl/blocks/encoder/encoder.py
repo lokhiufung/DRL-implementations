@@ -1,9 +1,9 @@
-from torch import nn
+import torch.nn as nn
 
-from drl.core.modules import TrainableModule
+# from drl.core.modules import TrainableModule
 
 
-class Encoder(TrainableModule):
+class DenseEncoder(nn.Module):
     def __init__(self, n_layers, hidden_dim, input_dim, output_dim):
         super(Encoder, self).__init__()
         self.n_layers = n_layers

@@ -30,7 +30,7 @@ class ReplayBuffer(NonTranableModule):
     def append(self, states=None, reward=None, next_state=None, action=None, done=None):
         self.buffer.append(self.output_type(state, reward, next_state, action, done))
 
-    def sample(self, batch_size):
+    def get_batch(self, batch_size):
         batch = random.sample(self.buffer, k=batch_size)
 
         return self._collate_fn(samples=samples)
