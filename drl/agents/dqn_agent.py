@@ -1,4 +1,5 @@
 import math
+import random
 
 import torch
 import torch.optim as optim
@@ -11,6 +12,7 @@ from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 class DQNAgent(Agent):
     def __init__(self, agent_parameters, mode='train'):
+        self.num_action = agent_parameters['num_action']
         self.policy_network = Network.from_config(**agent_parameters['network'])
         self.target_network = Network.from_config(**agent_parameters['network'])
         self.replay_bufer = ReplayBuffer(**agent_parameters['replay_buffer'])
@@ -56,19 +58,21 @@ class DQNAgent(Agent):
         self.optimizer.step()
         return loss.item() #, grad_norm**0.5
 
-    def _learn(self):
-
-    def greedy_infer(self, state):
+    def greedy_infer(self, sensory_input):
         with torch.no_grad():
             # pytorch doc: Returns a namedtuple (values, indices) where values is the maximum value of each row of the input tensor in the given dimension dim
-            max_output = self.policy_network(state).max(1)
+            max_output = self.policy_network(sensory_input).max(1)
             # print('max_output: {}'.format(self.policy_network(state)))
             value = max_output[0].view(1, 1)
             action = max_output[1].view(1, 1)
         return action, value
 
     def _act(self, sensory_input):
-        pass
+        if random.random() < self.epsilon:
+            action, _ = self.greedy_infer(sensory_input)
+            return action
+        else:
+            return random.choice(range(self.num_action))
 
     def act(self, sensory_input):
         # how many interactions has been taken
