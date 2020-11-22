@@ -1,4 +1,5 @@
-import gym
+
+class Environment(object):
+    """""""
 
 
-class 
