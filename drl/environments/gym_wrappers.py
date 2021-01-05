@@ -32,6 +32,7 @@ import os
 from collections import deque
 import gym
 from gym import spaces
+# from gym.wrappers import FrameStack
 # import cv2
 # cv2.ocl.setUseOpenCL(False)
 
@@ -243,7 +244,7 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 class FrameStack(gym.Wrapper):
-    def __init__(self, env, k):
+    def __init__(self, env, k=4):
         """Stack k last frames.
 
         Returns lazy array, which is much more memory efficient.
@@ -273,6 +274,7 @@ class FrameStack(gym.Wrapper):
         assert len(self.frames) == self.k
         return LazyFrames(list(self.frames))
 
+
 class ScaledFloatFrame(gym.ObservationWrapper):
     def __init__(self, env):
         gym.ObservationWrapper.__init__(self, env)
@@ -297,6 +299,7 @@ class LazyFrames(object):
 
     def _force(self):
         if self._out is None:
+            print(self._frames)
             self._out = np.concatenate(self._frames, axis=-1)
             self._frames = None
         return self._out

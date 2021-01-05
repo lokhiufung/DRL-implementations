@@ -5,7 +5,7 @@ import torch.nn as nn
 
 class DenseEncoder(nn.Module):
     def __init__(self, n_layers, hidden_dim, input_dim, output_dim):
-        super(Encoder, self).__init__()
+        super(DenseEncoder, self).__init__()
         self.n_layers = n_layers
         self.hidden_dim = hidden_dim
         self.input_dim = input_dim

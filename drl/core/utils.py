@@ -2,6 +2,8 @@ import json
 import yaml
 # from ruamel.yaml import YAML
 
+from importlib import import_module
+
 
 def load_json(filepath):
     with open(filepath, 'r') as f:
@@ -13,3 +15,8 @@ def load_yaml(filepath):
     with open(filepath, 'r') as f:
         dict_obj = yaml.load(f)
     return dict_obj
+
+
+def name_import(name):
+    module_class = import_module(name)
+    return module_class
