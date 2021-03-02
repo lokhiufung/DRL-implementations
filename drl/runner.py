@@ -3,7 +3,7 @@
 """
 
 class Runner:
-    def __init__(self, agent, env):
+    def __init__(self, agent):
         self.agent = agent
         self.env = env
 

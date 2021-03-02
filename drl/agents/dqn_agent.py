@@ -1,19 +1,24 @@
 import math
 import random
+from collections import OrderedDict
 
+from hydra.utils import instantiate 
 import torch
+import torch.nn as nn
 import torch.optim as optim
-
-from drl.core.agent import Agent
+import pytorch_lightning as pl
+# from drl.core.agent import Agent
 from drl.network import Network
 from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 
 
-class DQNAgent(Agent):
-    def __init__(self, agent_parameters, mode='train'):
-        self.num_action = agent_parameters['num_action']
-        self.policy_network = Network.from_config(**agent_parameters['network'])
+class DQNAgent(pl.LightningModule):
+    def __init__(self, cfg):
+        super().__init__()
+        self.policy_network = nn.Sequential(OrderedDict([
+            ('encoder', )
+        ]))
         self.target_network = Network.from_config(**agent_parameters['network'])
         self.replay_bufer = ReplayBuffer(**agent_parameters['replay_buffer'])
 
@@ -34,6 +39,7 @@ class DQNAgent(Agent):
             self.batch_size = agent_parameters['batch_size']
             self.train_step_counter = 0
 
+    def setup_optimizers(self)
     def _learn(self):
         batch = self.replay_buffer.get_batch(batch_size)
         #######################
