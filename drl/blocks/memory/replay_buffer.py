@@ -1,13 +1,12 @@
 import random
-from collections import deque, namedtuple
+import collections
 
-from drl.core.modules import NonTranableModule
-
+# from drl.core.modules import NonTranableModule
 
 import torch
 
 
-class ReplayBuffer(NonTranableModule):
+class ReplayBuffer:
     
     OUTPUT_TYPE = namedtuple(
         'Transition',
