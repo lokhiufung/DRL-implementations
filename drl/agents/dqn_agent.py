@@ -7,9 +7,9 @@ from hydra.utils import instantiate
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-# from drl.core.agent import Agent
+
 from drl.core.agent import Agent
-from drl.network import Network
+from drl.core.decorators import epsilon_greedy_play_step
 from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 
@@ -28,11 +28,6 @@ class DQNAgent(pl.LightningModule):
 
         self.replay_bufer = ReplayBuffer(**cfg.replay_buffer)
         
-        self.agent_steps = 0
-        self.exploration_scheduler = EpsilonGreeyExplorationScheduler(
-            self.agent_steps,
-            **cfg.exploration_scheduler
-        )
         self.target_update_freq = cfg.target_update_freq
         self.policy_network_freq = cfg.policy_network_freq
 
@@ -84,31 +79,20 @@ class DQNAgent(pl.LightningModule):
             'aver_q': values.mean(dim=0).item(),
             'aver_expected_next_q': expected_next_values.mean(dim=1).item(),
         }
+    
+    @epsilon_greedy_play_step
+    def exploration_play_step(self, state):
+        action, _ = self.play_step(state)
+        return action
 
-    def greedy_infer(self, sensory_input):
+    def play_step(self, state):
         with torch.no_grad():
-            # pytorch doc: Returns a namedtuple (values, indices) where values is the maximum value of each row of the input tensor in the given dimension dim
             max_output = self.policy_network(sensory_input).max(1)
-            # print('max_output: {}'.format(self.policy_network(state)))
             value = max_output[0].view(1, 1)
             action = max_output[1].view(1, 1)
-        return action, value
+        return action
 
-    def _act(self, sensory_input):
-        if random.random() < self.epsilon:
-            action, _ = self.greedy_infer(sensory_input)
-            return action
-        else:
-            return random.choice(range(self.num_action))
-
-    def act(self, sensory_input):
-        # how many interactions has been taken
-        self.step_counter += 1
-        # epsilon exponential decay
-        self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * math.exp(-1 * self.step_counter / self.decay_factor)
-        # update target_network if neccessary
-        if (self.step_counter - self.exploration_steps) % self.target_update_freq and self.step_counter > self.exploration_steps:
-            self.target_network.clone_weights(self.policy_network)
-        return self._act(sensory_input)
+    def random_play_step(self):
+        return 0
 
     
