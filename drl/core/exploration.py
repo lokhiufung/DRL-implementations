@@ -8,7 +8,7 @@ class ExplorationScheduler:
 class EpsilonGreeyExplorationScheduler(ExplorationScheduler):
     def __init__(self, agent_steps, eps_start, eps_end, decay_factor):
         self._steps = agent_steps
-        self._eps = eps_start
+        # self._eps = eps_start
         self._eps_start = eps_start
         self._eps_end = eps_end
 

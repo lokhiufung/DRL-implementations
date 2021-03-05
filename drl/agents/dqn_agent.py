@@ -15,7 +15,6 @@ from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 class DQNAgent(pl.LightningModule):
     def __init__(self, cfg: DictConfig):
-        super().__init__()
         # steup networks
         self.policy_network = nn.Sequential(OrderedDict([
             ('encoder', instantiate(cfg.network.encoder)),
@@ -30,6 +29,8 @@ class DQNAgent(pl.LightningModule):
         
         self.target_update_freq = cfg.target_update_freq
         self.policy_network_freq = cfg.policy_network_freq
+        
+        super().__init__(cfg)
 
     def setup_train_dataset(self, train_cfg):
         self._train_dataset = ReplayBufferDataset(
@@ -49,6 +50,9 @@ class DQNAgent(pl.LightningModule):
         return values
     
     def training_step(self, batch, batch_id):
+
+        self.play_step()
+
         states, rewards, actions, next_states, dones = batch
         
         actions = actions.unsqueeze(1)
@@ -80,19 +84,29 @@ class DQNAgent(pl.LightningModule):
             'aver_expected_next_q': expected_next_values.mean(dim=1).item(),
         }
     
-    @epsilon_greedy_play_step
-    def exploration_play_step(self, state):
-        action, _ = self.play_step(state)
-        return action
+    @torch.no_grad()
+    def play_step(self):
+        
+        current_state = self._env.current_state
 
-    def play_step(self, state):
-        with torch.no_grad():
-            max_output = self.policy_network(sensory_input).max(1)
-            value = max_output[0].view(1, 1)
-            action = max_output[1].view(1, 1)
-        return action
+        action = self.act(current_state)
+        next_state, reward, done, _ = self._env.step()
 
-    def random_play_step(self):
-        return 0
+        self.replay_buffer.append((current_state, reward, next_state, action, done))
+
+        if done:
+            self._env.reset_for_next_episode()
+        
+        
+
+    def act(self, state: np.array) -> int:
+        state = torch.tensor(state, dtype=torch.float, device=self.device)
+        values = self(state)
+        value, action = values.max(1)
+        if self._exploration_scheduler.eps < random.random():
+            return value.item(), self._env.sample_action()
+        else:
+            return value.item(), action.item()
+
 
     

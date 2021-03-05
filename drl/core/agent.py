@@ -2,6 +2,8 @@
 from omegaconf import DictConfig 
 import pytorch_lightning as pl
 
+from drl.core.enviroment import Environment
+
 
 class Agent(pl.LightningModule):
     """
@@ -23,10 +25,13 @@ class Agent(pl.LightningModule):
         self._env = None
         self._exploration_scheduler = None
         self.agent_steps = 0
+        
         if cfg.exploration_scheduler:
             self.setup_exploration_scheduler(cfg.exploration_scheduler)
 
         self.mode = 'train'
+    
+        self.setup_environment(cfg.env_cfg)
 
     def setup_exploration_scheduler(self, exploration_cfg):
         self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
@@ -35,7 +40,8 @@ class Agent(pl.LightningModule):
         raise NotImplementedError
 
     def setup_environment(self, env_cfg):
-        raise NotImplementedError
+        openai_env = instantiate(env_cfg.gym)
+        self._env = 
 
     def setup_train_dataloader(self, train_cfg):
         raise NotImplementedError
@@ -55,9 +61,6 @@ class Agent(pl.LightningModule):
         else:
             raise AttributeError('please setup_val_dataloader() first.')
     
-    def game_loop(self):
-        pass
-
     def run_warmup_episodes(self, n_episodes: int):
         """get samples by interacting with the environment"""
         for episode in range(n_episodes):
