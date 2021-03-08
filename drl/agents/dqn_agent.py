@@ -63,9 +63,9 @@ class DQNAgent(pl.LightningModule):
         expected_next_values = rewards + self.gamma * next_values  # bellman's equation
         loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network
         return OrderedDict([
-            ('loss', loss.item()),
-            ('aver_q', values.mean(dim=0).item()),
-            ('aver_expected_next_q', expected_next_values.mean(dim=1).item()),
+            ('loss', loss),
+            ('aver_q', values.mean(dim=0)),
+            ('aver_expected_next_q', expected_next_values.mean(dim=1)),
         ])
 
     # def validation_step(self, batch, batch_id):
@@ -105,7 +105,7 @@ class DQNAgent(pl.LightningModule):
         state = torch.tensor(state, dtype=torch.float, device=self.device)
         values = self(state)
         value, action = values.max(1)
-        return value.item(), action.item()
+        return value, action
 
 
     
