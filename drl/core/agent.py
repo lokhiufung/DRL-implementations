@@ -32,6 +32,9 @@ class Agent(pl.LightningModule):
         self.mode = 'train'
     
         self.setup_environment(cfg.env_cfg)
+        self.setup_train_dataloader(cfg.train_cfg)
+
+        self.warmup(n_episodes=cfg.warmup)
 
     def setup_exploration_scheduler(self, exploration_cfg):
         self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
@@ -40,7 +43,7 @@ class Agent(pl.LightningModule):
         raise NotImplementedError
 
     def setup_environment(self, env_cfg):
-        openai_env = instantiate(env_cfg.gym)
+        openai_env = gym.make(env_cfg.env_name)
         self._env = 
 
     def setup_train_dataloader(self, train_cfg):
@@ -54,18 +57,21 @@ class Agent(pl.LightningModule):
             return self._train_dataloader
         else:
             raise AttributeError('please setup_train_dataloader() first.')
-
+    
     def val_dataloader(self):
         if self._val_dataloader:
             return self._val_dataloader
         else:
             raise AttributeError('please setup_val_dataloader() first.')
-    
-    def run_warmup_episodes(self, n_episodes: int):
-        """get samples by interacting with the environment"""
-        for episode in range(n_episodes):
-            self.run_util_done()
 
+    def play_step(self):
+        raise NotImplementedError
+            
+    def warmup(self, n_episodes: int):
+        """get samples by interacting with the environment"""
+        while self._env.n_episodes > n_episodes:
+            self.play_step()
+        
 
 
 

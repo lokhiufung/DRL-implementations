@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.utils.data import Dataset, IterableDataset
 
@@ -5,36 +6,40 @@ from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 
 class LowDimReplayBufferDataset(IterableDataset):
-    def __init__(self, replay_buffer: ReplayBuffer):
+    def __init__(self, replay_buffer: ReplayBuffer, batch_size: int=16):
         super().__init__()
         self.replay_buffer = replay_buffer
-    
+        self.batch_size = batch_size
+
     @property
     def output_port(self):
         return (
-            ('state', ('B', 'C')),
-            ('reward'), ('B', 'R'),
-            ('action'), ('B', 'A'),
-            ('next_state'), ('B', 'C'),
-            ('done'), ('B', 'I'),
+            ('states', ('B', 'C')),
+            ('rewards'), ('B', 'R'),
+            ('actions'), ('B', 'A'),
+            ('next_states'), ('B', 'C'),
+            ('dones'), ('B', 'I'),
         )
     
     def __iter__(self):
-        return iter(self.replay_buffer)
+        return self.replay_buffer.get_batch(batch_size=self.batch_size)
 
     def collate_fn(self, batch):
-        states = [torch.tensor(sample.state, dtype=torch.float) for sample in batch]
-        rewards = [torch.tensor(sample.rewards, dtype=torch.float) for sample in batch]
-        actions = [torch.tensor(sample.actions, dtype=torch.long) for sample in batch]
-        next_states = [torch.tensor(sample.next_state, dtype=torch.float) for sample in batch]
-        dones = [torch.tensor(sample.done, dtype=torch.bool) for sample in batch] 
-        return (
-            torch.cat(states, dim=0),
-            torch.cat(rewards, dim=0),
-            torch.cat(actions, dim=0),
-            torch.cat(next_states, dim=0),
-            torch.cat(dones, dim=0),
-        )
+        batch = batch[0]  # REMINDME: get_batch() returns a list of sampled Trainsition objects
+
+        states = np.stack([sample.state for sample in batch])
+        rewards = [sample.reward for sample in batch]
+        actions = [sample.action for sample in batch]
+        next_states = np.stack([sample.next_state for sample in batch])
+        dones = [sample.done for sample in batch] 
+        
+        states = torch.tensor(states)
+        actions = torch.tensor(actions)
+        rewards = torch.tensor(rewards)
+        next_states = torch.tensor(next_states)
+        dones = torch.tensor(dones)
+        return states, actions, rewards, next_states, dones
+            
 
 class HighDimReplayBufferDataset(LowDimReplayBufferDataset):
     @property
