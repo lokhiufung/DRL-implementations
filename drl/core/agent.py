@@ -1,6 +1,8 @@
 
 from omegaconf import DictConfig 
 import pytorch_lightning as pl
+from hydra.utils import instantiate
+import gym
 
 from drl.core.enviroment import Environment
 
@@ -31,10 +33,9 @@ class Agent(pl.LightningModule):
 
         self.mode = 'train'
     
-        self.setup_environment(cfg.env_cfg)
-        self.setup_train_dataloader(cfg.train_cfg)
+        self.setup_environment(cfg.env)
 
-        self.warmup(n_episodes=cfg.warmup)
+        # self.warmup(n_episodes=cfg.warmup)
 
     def setup_exploration_scheduler(self, exploration_cfg):
         self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
@@ -44,7 +45,7 @@ class Agent(pl.LightningModule):
 
     def setup_environment(self, env_cfg):
         openai_env = gym.make(env_cfg.env_name)
-        self._env = 
+        self._env = Environment(env=openai_env)
 
     def setup_train_dataloader(self, train_cfg):
         raise NotImplementedError

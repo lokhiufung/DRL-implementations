@@ -2,6 +2,7 @@ import math
 import random
 from collections import OrderedDict
 
+import numpy as np
 from omegaconf import DictConfig
 from hydra.utils import instantiate
 import torch
@@ -9,13 +10,22 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from drl.core.agent import Agent
-from drl.core.decorators import epsilon_greedy_play_step
+from drl.core.decorators import take_agent_step
 from drl.blocks.memory.replay_buffer import ReplayBuffer
+from drl.datasets.replay_buffer_dataset import LowDimReplayBufferDataset
 
 
-class DQNAgent(pl.LightningModule):
+class DQNAgent(Agent):
     def __init__(self, cfg: DictConfig):
         # steup networks
+        super().__init__(cfg)
+
+        self.replay_buffer = ReplayBuffer(**cfg.replay_buffer)
+        
+        self.target_update_freq = cfg.target_update_freq
+        self.policy_network_freq = cfg.policy_network_freq
+        
+
         self.policy_network = nn.Sequential(OrderedDict([
             ('encoder', instantiate(cfg.network.encoder)),
             ('output_head', instantiate(cfg.network.output_head))
@@ -25,15 +35,11 @@ class DQNAgent(pl.LightningModule):
             ('output_head', instantiate(cfg.network.output_head))
         ]))
 
-        self.replay_bufer = ReplayBuffer(**cfg.replay_buffer)
-        
-        self.target_update_freq = cfg.target_update_freq
-        self.policy_network_freq = cfg.policy_network_freq
-        
-        super().__init__(cfg)
+        self.setup_train_dataloader(cfg.train_data)
+        self.setup_optimizers(cfg.opitm)
 
-    def setup_train_dataset(self, train_cfg):
-        self._train_dataset = ReplayBufferDataset(
+    def setup_train_dataloader(self, train_cfg):
+        self._train_dataset = LowDimReplayBufferDataset(
             self.replay_buffer,
             **train_cfg.dataset
         )
@@ -46,7 +52,7 @@ class DQNAgent(pl.LightningModule):
         self._optimizer = instantiate(optim_cfg)
 
     def forward(self, state):
-        values = self.policy_network(states)
+        values = self.policy_network(state)
         return values
     
     def training_step(self, batch, batch_id):
@@ -83,7 +89,7 @@ class DQNAgent(pl.LightningModule):
     #         ('aver_q', values.mean(dim=0).item()),
     #         ('aver_expected_next_q', expected_next_values.mean(dim=1).item()),
     #     ])
-    
+    @take_agent_step
     @torch.no_grad()
     def play_step(self):
         
@@ -94,18 +100,20 @@ class DQNAgent(pl.LightningModule):
         if self._exploration_scheduler.eps < random.random():
             action = self._env.sample_action()
 
-        next_state, reward, done, _ = self._env.step()
+        next_state, reward, done, _ = self._env.step(action)
 
-        self.replay_buffer.append((current_state, reward, next_state, action, done))
+        self.replay_buffer.append(current_state, reward, next_state, action, done)
 
         if done:
             self._env.reset_for_next_episode()
 
     def act(self, state: np.array) -> int:
+        if len(state.shape) < 2:
+            state = np.expand_dims(state, axis=0)
         state = torch.tensor(state, dtype=torch.float, device=self.device)
         values = self(state)
-        value, action = values.max(1)
-        return value, action
+        value, action = values.max(dim=1)
+        return value.detach().numpy(), action.detach().numpy()[0]  # probably buggy if index of np.array is used here to retrieve the action index
 
 
     

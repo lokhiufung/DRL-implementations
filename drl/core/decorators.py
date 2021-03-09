@@ -1,10 +1,10 @@
 import random
 
 
-def train_play_step(play_step):
+def take_agent_step(method):
     def wrapper(ref, *args, **kwargs):
         ref.agent_steps += 1
-        return play_step(ref, *args, **kwargs)
+        return method(ref, *args, **kwargs)
     return wrapper
 
 

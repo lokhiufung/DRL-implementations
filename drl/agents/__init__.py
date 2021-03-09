@@ -1,2 +1,2 @@
 # register agents
-from agents.nec import NECAgent
+# from agents.nec import NECAgent

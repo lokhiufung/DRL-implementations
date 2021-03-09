@@ -21,8 +21,12 @@ class EpsilonGreeyExplorationScheduler(ExplorationScheduler):
         )
 
     @property
+    def steps(self):
+        return self._steps
+
+    @property
     def eps(self):
-        return _get_eps()
+        return self._get_eps()
 
 
     
