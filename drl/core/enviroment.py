@@ -29,6 +29,8 @@ class Environment(object):
 
     def reset(self) -> np.array:
         self.n_episodes = 1
+        self.cum_reward_in_episode = 0.0
+        self.reward_per_episode = []
         return self._env.reset()
 
     def render(self, *args, **kwargs):

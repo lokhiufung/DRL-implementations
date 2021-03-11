@@ -11,9 +11,7 @@ class Agent(pl.LightningModule):
     """
     Agent is constituted of Modules and interact with Environment 
     """
-    # def serialize_modules(self, ckpt_dir):
-    #     for module in self._modules:
-    #         modules.serialize(ckpt_dir)
+    
     def __init__(self, cfg: DictConfig):
         super().__init__()
         self.haparams = cfg  # save cfg as hyparams
@@ -38,7 +36,9 @@ class Agent(pl.LightningModule):
         # self.warmup(n_episodes=cfg.warmup)
 
     def setup_exploration_scheduler(self, exploration_cfg):
-        self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
+        # self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
+        self._exploration_scheduler = instantiate(exploration_cfg)
+
         
     def setup_optimizers(self, optim_cfg):
         raise NotImplementedError

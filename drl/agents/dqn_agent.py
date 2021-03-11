@@ -34,6 +34,7 @@ class DQNAgent(Agent):
             ('encoder', instantiate(cfg.network.encoder)),
             ('output_head', instantiate(cfg.network.output_head))
         ]))
+        self.target_network.eval()
 
         self.setup_train_dataloader(cfg.train_data)
         self.setup_optimizers(cfg.opitm)
@@ -49,7 +50,7 @@ class DQNAgent(Agent):
         ) 
 
     def setup_optimizers(self, optim_cfg: DictConfig):
-        self._optimizer = instantiate(optim_cfg)
+        self._optimizer = instantiate(optim_cfg, parameters=self.parameters)
 
     def forward(self, state):
         values = self.policy_network(state)
@@ -74,21 +75,6 @@ class DQNAgent(Agent):
             ('aver_expected_next_q', expected_next_values.mean(dim=1)),
         ])
 
-    # def validation_step(self, batch, batch_id):
-    #     states, rewards, actions, next_states, dones = batch
-        
-    #     actions = actions.unsqueeze(1)
-    #     values = self(states).gather(1, actions) # Q_a value with a = argmax~a(Q)
-        
-    #     next_values = torch.zeros(batch_size, dtype=torch.float32, device=states.device)
-    #     next_values[~dones] = self.target_network(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
-    #     expected_next_values = rewards + self.gamma * next_values  # bellman's equation
-    #     loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network
-    #     return OrderedDict([
-    #         ('loss', loss.item()),
-    #         ('aver_q', values.mean(dim=0).item()),
-    #         ('aver_expected_next_q', expected_next_values.mean(dim=1).item()),
-    #     ])
     @take_agent_step
     @torch.no_grad()
     def play_step(self):
@@ -97,7 +83,8 @@ class DQNAgent(Agent):
 
         value, action = self.act(current_state)
         # exploration play
-        if self._exploration_scheduler.eps < random.random():
+        # if self._exploration_scheduler.eps < random.random():
+        if self._exploration_scheduler.get_eps_on_step(self.agent_steps) < random.random():
             action = self._env.sample_action()
 
         next_state, reward, done, _ = self._env.step(action)

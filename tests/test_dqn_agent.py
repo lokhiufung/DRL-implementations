@@ -50,14 +50,9 @@ def test_dqn_agent_play_step():
     agent = get_dqn_agent()
     agent.play_step()
 
-    print(id(agent.agent_steps))
-    print(id(agent._exploration_scheduler.steps))
-
     assert agent.agent_steps == 1
     assert len(agent.replay_buffer) == 1
-    assert agent._exploration_scheduler.steps == 1
-    # batch = next(iter(agent.train_dataloader()))
-    # assert
+
 
 def test_dqn_agent_act():
     agent = get_dqn_agent()
@@ -65,7 +60,5 @@ def test_dqn_agent_act():
     state = agent._env.current_state
     with torch.no_grad():
         value, action = agent.act(state)
-    assert type(action) == int
+    assert type(action) == np.int64
 
-
-test_dqn_agent_play_step()
