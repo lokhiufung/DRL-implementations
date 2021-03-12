@@ -15,6 +15,7 @@ class Agent(pl.LightningModule):
     def __init__(self, cfg: DictConfig):
         super().__init__()
         self.haparams = cfg  # save cfg as hyparams
+        self._cfg = cfg
 
         self._train_dataset = None
         self._train_dataloader = None
@@ -33,15 +34,15 @@ class Agent(pl.LightningModule):
     
         self.setup_environment(cfg.env)
 
-        # self.warmup(n_episodes=cfg.warmup)
-
     def setup_exploration_scheduler(self, exploration_cfg):
         # self._exploration_scheduler = instantiate(exploration_cfg, agent_steps=self.agent_steps)
         self._exploration_scheduler = instantiate(exploration_cfg)
-
         
-    def setup_optimizers(self, optim_cfg):
-        raise NotImplementedError
+    def configure_optimizers(self):
+        if self._optimizer:
+            return self._optimizer
+        else:
+            raise NotImplementedError
 
     def setup_environment(self, env_cfg):
         openai_env = gym.make(env_cfg.env_name)
@@ -50,8 +51,8 @@ class Agent(pl.LightningModule):
     def setup_train_dataloader(self, train_cfg):
         raise NotImplementedError
 
-    def setup_val_dataloader(self, val_cfg):
-        raise NotImplementedError
+    # def setup_val_dataloader(self, val_cfg):
+    #     raise NotImplementedError
     
     def train_dataloader(self):
         if self._train_dataloader:
@@ -59,22 +60,27 @@ class Agent(pl.LightningModule):
         else:
             raise AttributeError('please setup_train_dataloader() first.')
     
-    def val_dataloader(self):
-        if self._val_dataloader:
-            return self._val_dataloader
-        else:
-            raise AttributeError('please setup_val_dataloader() first.')
+    # def val_dataloader(self):
+    #     if self._val_dataloader:
+    #         return self._val_dataloader
+    #     else:
+    #         raise AttributeError('please setup_val_dataloader() first.')
 
     def play_step(self):
         raise NotImplementedError
             
     def warmup(self, n_episodes: int):
         """get samples by interacting with the environment"""
-        while self._env.n_episodes > n_episodes:
+        while self._env.n_episodes < n_episodes:
             self.play_step()
+        print('--------{}---------'.format(self._cfg.env.env_name))
+        print('--------warmup---------')
+        print('highest: {}'.format(max(self._env.reward_per_episode)))
+        print('lowest: {}'.format(min(self._env.reward_per_episode)))
+        print('--------warmup--------')
+
+        self._env.reset()  # reset to factory state after warmup~
         
-
-
 
 
         

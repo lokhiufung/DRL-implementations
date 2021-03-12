@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from hydra.utils import instantiate
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from drl.core.agent import Agent
@@ -22,10 +23,6 @@ class DQNAgent(Agent):
 
         self.replay_buffer = ReplayBuffer(**cfg.replay_buffer)
         
-        self.target_update_freq = cfg.target_update_freq
-        self.policy_network_freq = cfg.policy_network_freq
-        
-
         self.policy_network = nn.Sequential(OrderedDict([
             ('encoder', instantiate(cfg.network.encoder)),
             ('output_head', instantiate(cfg.network.output_head))
@@ -37,7 +34,9 @@ class DQNAgent(Agent):
         self.target_network.eval()
 
         self.setup_train_dataloader(cfg.train_data)
-        self.setup_optimizers(cfg.opitm)
+        self.setup_optimizers(cfg.optimizer)
+
+        self.gamma = self._cfg.gamma
 
     def setup_train_dataloader(self, train_cfg):
         self._train_dataset = LowDimReplayBufferDataset(
@@ -50,7 +49,7 @@ class DQNAgent(Agent):
         ) 
 
     def setup_optimizers(self, optim_cfg: DictConfig):
-        self._optimizer = instantiate(optim_cfg, parameters=self.parameters)
+        self._optimizer = instantiate(optim_cfg, params=self.parameters())
 
     def forward(self, state):
         values = self.policy_network(state)
@@ -59,9 +58,9 @@ class DQNAgent(Agent):
     def training_step(self, batch, batch_id):
 
         self.play_step()
-
-        states, rewards, actions, next_states, dones = batch
         
+        states, actions, rewards, next_states, dones = batch
+        batch_size = states.size(0)
         actions = actions.unsqueeze(1)
         values = self(states).gather(1, actions) # Q_a value with a = argmax~a(Q)
         
@@ -69,10 +68,17 @@ class DQNAgent(Agent):
         next_values[~dones] = self.target_network(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
         expected_next_values = rewards + self.gamma * next_values  # bellman's equation
         loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network
+        
+        # slowly update target_network
+        if self.agent_steps % 4:
+            self.update_target_network()
+
+        # self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        # self.log('aver_q', values.mean(dim=0), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
         return OrderedDict([
             ('loss', loss),
             ('aver_q', values.mean(dim=0)),
-            ('aver_expected_next_q', expected_next_values.mean(dim=1)),
         ])
 
     @take_agent_step
@@ -102,5 +108,5 @@ class DQNAgent(Agent):
         value, action = values.max(dim=1)
         return value.detach().numpy(), action.detach().numpy()[0]  # probably buggy if index of np.array is used here to retrieve the action index
 
-
-    
+    def update_target_network(self):
+        self.target_network.load_state_dict(self.policy_network.state_dict())

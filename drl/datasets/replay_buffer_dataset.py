@@ -24,6 +24,9 @@ class LowDimReplayBufferDataset(IterableDataset):
     def __iter__(self):
         return self.replay_buffer.get_batch(batch_size=self.batch_size)
 
+    def __len__(self):
+        return len(self.replay_buffer)
+
     def collate_fn(self, batch):
         batch = batch[0]  # REMINDME: get_batch() returns a list of sampled Trainsition objects
 
@@ -33,11 +36,11 @@ class LowDimReplayBufferDataset(IterableDataset):
         next_states = np.stack([sample.next_state for sample in batch])
         dones = [sample.done for sample in batch] 
         
-        states = torch.tensor(states)
-        actions = torch.tensor(actions)
-        rewards = torch.tensor(rewards)
-        next_states = torch.tensor(next_states)
-        dones = torch.tensor(dones)
+        states = torch.tensor(states, dtype=torch.float)
+        actions = torch.tensor(actions, dtype=torch.long)
+        rewards = torch.tensor(rewards, dtype=torch.float)
+        next_states = torch.tensor(next_states, dtype=torch.float)
+        dones = torch.tensor(dones, dtype=torch.bool)
         return states, actions, rewards, next_states, dones
             
 
