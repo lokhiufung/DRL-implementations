@@ -24,8 +24,9 @@ class LowDimReplayBufferDataset(IterableDataset):
     def __iter__(self):
         return self.replay_buffer.get_batch(batch_size=self.batch_size)
 
-    def __len__(self):
-        return len(self.replay_buffer)
+    # temp
+    # def __len__(self):
+    #     return self.replay_buffer.capacity
 
     def collate_fn(self, batch):
         batch = batch[0]  # REMINDME: get_batch() returns a list of sampled Trainsition objects

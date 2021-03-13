@@ -11,7 +11,7 @@ def test_low_dim_replay_buffer_dataset_batch():
     replay_buffer = ReplayBuffer()
     
     state = ENV.reset()
-    for _ in range(1000):
+    for _ in range(10):
         action = ENV.action_space.sample()
         next_state, reward, done, _ = ENV.step(action)
         if done:
@@ -34,7 +34,7 @@ def test_low_dim_replay_buffer_dataset_dim():
     replay_buffer = ReplayBuffer()
     
     state = ENV.reset()
-    for _ in range(1000):
+    for _ in range(10):
         action = ENV.action_space.sample()
         next_state, reward, done, _ = ENV.step(action)
         if done:

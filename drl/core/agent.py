@@ -39,7 +39,7 @@ class Agent(pl.LightningModule):
         self._exploration_scheduler = instantiate(exploration_cfg)
         
     def configure_optimizers(self):
-        if self._optimizer:
+        if self._optimizer is not None:
             return self._optimizer
         else:
             raise NotImplementedError
@@ -55,7 +55,7 @@ class Agent(pl.LightningModule):
     #     raise NotImplementedError
     
     def train_dataloader(self):
-        if self._train_dataloader:
+        if self._train_dataloader is not None:
             return self._train_dataloader
         else:
             raise AttributeError('please setup_train_dataloader() first.')
