@@ -6,10 +6,11 @@ from drl.blocks.memory.replay_buffer import ReplayBuffer
 
 
 class LowDimReplayBufferDataset(IterableDataset):
-    def __init__(self, replay_buffer: ReplayBuffer, batch_size: int=16):
+    def __init__(self, replay_buffer: ReplayBuffer, batch_size: int=16, batches_per_epoch: int=100):
         super().__init__()
         self.replay_buffer = replay_buffer
         self.batch_size = batch_size
+        self.batches_per_epoch = batches_per_epoch
 
     @property
     def output_port(self):
@@ -21,16 +22,17 @@ class LowDimReplayBufferDataset(IterableDataset):
             ('dones'), ('B', 'I'),
         )
     
+    def __len__(self):
+        return self.batches_per_epoch
+        
     def __iter__(self):
-        return self.replay_buffer.get_batch(batch_size=self.batch_size)
+        for _ in range(self.batches_per_epoch):
+            yield self.replay_buffer.get_batch(batch_size=self.batch_size)
 
-    # temp
-    # def __len__(self):
-    #     return self.replay_buffer.capacity
 
     def collate_fn(self, batch):
         batch = batch[0]  # REMINDME: get_batch() returns a list of sampled Trainsition objects
-
+        # print(batch)
         states = np.stack([sample.state for sample in batch])
         rewards = [sample.reward for sample in batch]
         actions = [sample.action for sample in batch]

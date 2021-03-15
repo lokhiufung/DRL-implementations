@@ -9,7 +9,7 @@ from drl.agents.dqn_agent import DQNAgent
 def main(cfg: DictConfig):
     agent = DQNAgent(cfg.agent)
 
-    agent.warmup(100)  # warmup with 100 episodes
+    agent.warmup(1000)  # warmup with 100 episodes
 
     print('len: {}'.format(len(agent.replay_buffer)))
     trainer = pl.Trainer(**cfg.trainer)

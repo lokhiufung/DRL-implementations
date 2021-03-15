@@ -5,6 +5,7 @@ agent:
   train_data:
     dataset:
       batch_size: 4
+      batches_per_epoch: 10000 
 
   env: 
     env_name: "CartPole-v0"
@@ -16,7 +17,7 @@ agent:
     decay_factor: 1.0
 
   replay_buffer:
-    capacity: 1000
+    capacity: 100000
 
   network:
     encoder:
@@ -36,5 +37,5 @@ agent:
 trainer:
   gpus: 0
   checkpoint_callback: true
-  # max_epochs: 20
-  max_steps: 20000
+  max_epochs: 20
+  # max_steps: 20000

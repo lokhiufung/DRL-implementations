@@ -73,8 +73,8 @@ class DQNAgent(Agent):
         if self.agent_steps % 4:
             self.update_target_network()
 
-        # self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        # self.log('aver_q', values.mean(dim=0), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('aver_q', values.mean(dim=0), on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         return OrderedDict([
             ('loss', loss),

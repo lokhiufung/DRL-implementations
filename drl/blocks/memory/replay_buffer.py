@@ -19,9 +19,9 @@ class ReplayBuffer:
         self.buffer.append(self.output_type(state, reward, next_state, action, done))
 
     def get_batch(self, batch_size):
-        """generator for getting randomly batched samples"""
+        """ Get randomly batched samples"""
         batch = random.sample(self.buffer, k=batch_size)
-        yield batch
+        return batch
 
     def __len__(self):
         return len(self.buffer)

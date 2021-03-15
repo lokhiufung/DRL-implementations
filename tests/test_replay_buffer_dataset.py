@@ -48,7 +48,7 @@ def test_low_dim_replay_buffer_dataset_dim():
         batch_size=4
     )
     dataloader = DataLoader(dataset, collate_fn=dataset.collate_fn)
-
+    
     batch = next(iter(dataloader))
     print(batch)
     assert batch[0].size() == (4, 4)
@@ -57,3 +57,4 @@ def test_low_dim_replay_buffer_dataset_dim():
     assert batch[3].size() == (4, 4)
     assert batch[4].size() == (4,)
 
+test_low_dim_replay_buffer_dataset_batch()
