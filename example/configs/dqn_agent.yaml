@@ -39,4 +39,5 @@ trainer:
   gpus: 0
   checkpoint_callback: true
   max_epochs: 20
-  # max_steps: 20000
+  checkpoint_callback: true
+  
