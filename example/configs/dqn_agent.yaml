@@ -2,6 +2,7 @@ name: &name "dqn-low-dim-dense"
 
 agent:
   gamma: 0.99
+  update_target_steps: 10
   train_data:
     dataset:
       batch_size: 4
@@ -14,7 +15,7 @@ agent:
     _target_: "drl.core.exploration.EpsilonGreeyExplorationScheduler"
     eps_start: 0.9
     eps_end: 0.1
-    decay_factor: 1.0
+    decay_factor: 200.0
 
   replay_buffer:
     capacity: 100000

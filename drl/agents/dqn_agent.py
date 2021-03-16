@@ -37,6 +37,7 @@ class DQNAgent(Agent):
         self.setup_optimizers(cfg.optimizer)
 
         self.gamma = self._cfg.gamma
+        self.update_target_steps = self._cfg.update_target_steps
 
     def setup_train_dataloader(self, train_cfg):
         self._train_dataset = LowDimReplayBufferDataset(
@@ -65,16 +66,19 @@ class DQNAgent(Agent):
         values = self(states).gather(1, actions) # Q_a value with a = argmax~a(Q)
         
         next_values = torch.zeros(batch_size, dtype=torch.float32, device=states.device)
-        next_values[~dones] = self.target_network(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
+        with torch.no_grad():
+            next_values[~dones] = self.target_network(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
         expected_next_values = rewards + self.gamma * next_values  # bellman's equation
         loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network
         
         # slowly update target_network
-        if self.agent_steps % 4:
+        if self.agent_steps % self.update_target_steps == 0:
             self.update_target_network()
 
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('aver_q', values.mean(dim=0), on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        if self._env.n_episodes > 1:
+            self.log('latest_score', self._env.reward_per_episode[-1], on_epoch=True, prog_bar=True, logger=True)
 
         return OrderedDict([
             ('loss', loss),
@@ -90,7 +94,10 @@ class DQNAgent(Agent):
         value, action = self.act(current_state)
         # exploration play
         # if self._exploration_scheduler.eps < random.random():
-        if self._exploration_scheduler.get_eps_on_step(self.agent_steps) < random.random():
+        exploration_eps = self._exploration_scheduler.get_eps_on_step(self.agent_steps)
+        self.log('exploration_eps', exploration_eps, on_step=True, logger=True)
+
+        if exploration_eps > random.random():
             action = self._env.sample_action()
 
         next_state, reward, done, _ = self._env.step(action)
@@ -100,6 +107,20 @@ class DQNAgent(Agent):
         if done:
             self._env.reset_for_next_episode()
 
+    @torch.no_grad()
+    def play_warmup_step(self):
+        
+        current_state = self._env.current_state
+
+        action = self._env.sample_action()
+
+        next_state, reward, done, _ = self._env.step(action)
+
+        self.replay_buffer.append(current_state, reward, next_state, action, done)
+
+        if done:
+            self._env.reset_for_next_episode()
+ 
     def act(self, state: np.array) -> int:
         if len(state.shape) < 2:
             state = np.expand_dims(state, axis=0)

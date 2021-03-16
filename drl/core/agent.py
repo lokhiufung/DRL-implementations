@@ -66,13 +66,16 @@ class Agent(pl.LightningModule):
     #     else:
     #         raise AttributeError('please setup_val_dataloader() first.')
 
+    def play_warmup_step(self):
+        raise NotImplementedError
+
     def play_step(self):
         raise NotImplementedError
             
     def warmup(self, n_episodes: int):
         """get samples by interacting with the environment"""
         while self._env.n_episodes < n_episodes:
-            self.play_step()
+            self.play_warmup_step()
         print('--------{}---------'.format(self._cfg.env.env_name))
         print('--------warmup---------')
         print('highest: {}'.format(max(self._env.reward_per_episode)))

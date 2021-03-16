@@ -10,8 +10,7 @@ sudo apt-get install graphviz
 pip install torchviz
 ```
 
-
-## install spinningup
+## install spinningup (**may not need now**)
 install openMPI
 ```
 sudo apt-get update && sudo apt-get install libopenmpi-dev
@@ -23,31 +22,15 @@ cd spinningup
 pip install -e .
 ```
 
-
 ## run experiments
-1. set hyparams in "hyparams" folder
-2. run script, e.g
 ```
-python dqn.py --name=dqn-01
-```
-3. run the following to check tensorboard
-```
-tensorboard --logdir=./experiment
+# can use command line to modify the parameters of dqn agent
+# use tensorboard to visualize the results
+python example/run_dqn.py 
 ```
 
 
-## TODO
-### dqn.py
-1. check ReplayBuffer; (DONE) append(), (DONE) get_batch(), (DONE) __len__()
-2. check QNetwork; (DONE) forward()
-3. check DQNAgent; (DONE) replay(), (DONE) greedy_infer(), (DONE) epsilon_greedy_infer(), (DONE) remember(), (DONE) update_target_network()
-4. (DONE) debug training; loss exploded, q value exploded (mistakenly flipped the sign of choosing random action in epsilon_greedy_infer)
-5. try a range of target_update_freq
-6. add logger to DQNAgent
-7. hyparameters tuning 
-
-
-### a3c.py
+### a3c.py (needed pytorch lightning version)
 1. check if clip_grad_norm_ works 
 2. check if step() correctly applied on model
 3. prob_tensor becomes nan after several steps
@@ -56,19 +39,13 @@ tensorboard --logdir=./experiment
 RuntimeError: invalid multinomial distribution (encountering probability entry < 0)
 
 
-### nec.py
+### nec.py (needed pytorch lightning version)
 1. dnd
 2. how to update dnd
 3. how to replay
 4. try a more efficient way to accumulate n_steps_q
 5. use kdtree to find nearest neighbor
 6. set similarity_threshold/alpha for table update
-7. 
-
-
-### general
-1. (DONE) tensorboard_logger for logging training process
-2. log grads, weights of each layers  
 
 
 ## remarks
