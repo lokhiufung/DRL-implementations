@@ -4,6 +4,13 @@ import numpy as np
 import torch
 
 
+class DifferentiableNeuralDict(object):
+    def __init__(self, capacity: int=10000):
+        self.capacity = capacity
+
+    
+
+
 class DND(object):
     """
     differentiable neural dictionary; should  be differentiable
