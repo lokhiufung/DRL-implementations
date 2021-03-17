@@ -8,6 +8,12 @@ class DifferentiableNeuralDict(object):
     def __init__(self, capacity: int=10000):
         self.capacity = capacity
 
+    def lookup(self, embed):
+        pass
+
+    def write(self):
+        pass
+
     
 
 

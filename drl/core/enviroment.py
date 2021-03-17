@@ -45,6 +45,9 @@ class Environment(object):
     def sample_action(self) -> int:
         return self._env.action_space.sample()
 
+    def n_actions(self) -> int:
+        return len(self._env.action_space.n)
+
     def close(self):
         return self._env.close()
     

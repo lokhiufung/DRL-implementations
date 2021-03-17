@@ -8,5 +8,7 @@ class NECAgent(DQNAgent):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self.dnd = DifferentiableNeuralDict()
+        self.dnd = {}
+        for action in range(self._env.n_actions):
+            self.dnd[action] = DifferentiableNeuralDict()
 
