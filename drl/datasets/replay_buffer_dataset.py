@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset, IterableDataset
@@ -57,3 +59,39 @@ class HighDimReplayBufferDataset(LowDimReplayBufferDataset):
             ('next_state'), ('B', 'H', 'W', 'C'),
             ('done'), ('B', 'I'),
         )
+
+
+class NStepsLowDimReplayBufferDataset(LowDimReplayBufferDataset):
+    def __init__(self, replay_buffer: ReplayBuffer, batch_size: int=16, batches_per_epoch: int=100, horizon: int=100, gamma: float=0.999):
+        super().__init__(replay_buffer: ReplayBuffer, batch_size: int=16, batches_per_epoch: int=100)
+        self.horizon = horizon
+        self.gamma = gamma
+
+    def get_discount_n_step_reward(self, transitions):
+        n_step_reward = 0.0
+        for i, transition in enumerate(transitions):
+            if transition.done:
+                break
+            else:
+                n_step_reward += (self.gamma**i) * transition.reward
+        return n_step_reward
+
+    def __iter__(self):
+        transitions = self.replay_buffer.buffer
+        size = len(transitions)
+        n_steps_transitions = []
+        for i in range(0, size, step=horizon):
+            n_step_transition = self.replay_buffer.output_type(
+                state=transitions[i].state,
+                reward=self.get_discount_n_step_reward(transitions[i:min(i+horizon, size)]),
+                next_state=transitions[i:min(i+horizon, size)].next_state,
+                action=transitions[i].action,
+                done=transitions[i].done
+            )
+        
+        random.shuffle(n_steps_transitions)
+        
+        for i in range(self.batches_per_epoch):
+            yield n_steps_transitions[i:min(i+self.batch_size, len(n_steps_transitions))]
+
+
