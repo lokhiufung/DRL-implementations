@@ -63,32 +63,33 @@ class HighDimReplayBufferDataset(LowDimReplayBufferDataset):
 
 class NStepsLowDimReplayBufferDataset(LowDimReplayBufferDataset):
     def __init__(self, replay_buffer: ReplayBuffer, batch_size: int=16, batches_per_epoch: int=100, horizon: int=100, gamma: float=0.999):
-        super().__init__(replay_buffer: ReplayBuffer, batch_size: int=16, batches_per_epoch: int=100)
+        super().__init__(replay_buffer, batch_size, batches_per_epoch)
         self.horizon = horizon
         self.gamma = gamma
 
     def get_discount_n_step_reward(self, transitions):
         n_step_reward = 0.0
         for i, transition in enumerate(transitions):
+            n_step_reward += (self.gamma**i) * transition.reward
             if transition.done:
                 break
-            else:
-                n_step_reward += (self.gamma**i) * transition.reward
         return n_step_reward
 
     def __iter__(self):
-        transitions = self.replay_buffer.buffer
+        transitions = list(self.replay_buffer.buffer)  # reminder: cannot slice a deque
         size = len(transitions)
         n_steps_transitions = []
-        for i in range(0, size, step=horizon):
-            n_step_transition = self.replay_buffer.output_type(
+        for i in range(0, size, self.horizon):
+            # print(type(transitions))
+            n_steps_transition = self.replay_buffer.output_type(
                 state=transitions[i].state,
-                reward=self.get_discount_n_step_reward(transitions[i:min(i+horizon, size)]),
-                next_state=transitions[i:min(i+horizon, size)].next_state,
+                reward=self.get_discount_n_step_reward(transitions[i:min(i+self.horizon, size)]),
+                next_state=transitions[min(i+self.horizon, size-1)].next_state,  # reminder: exclusive upper bound
                 action=transitions[i].action,
                 done=transitions[i].done
             )
-        
+            n_steps_transitions.append(n_steps_transition)
+
         random.shuffle(n_steps_transitions)
         
         for i in range(self.batches_per_epoch):
