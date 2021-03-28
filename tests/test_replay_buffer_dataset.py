@@ -57,4 +57,29 @@ def test_low_dim_replay_buffer_dataset_dim():
     assert batch[3].size() == (4, 4)
     assert batch[4].size() == (4,)
 
-test_low_dim_replay_buffer_dataset_batch()
+
+def test_n_steps_low_dim_replay_buffer_dataset():
+    from drl.datasets.replay_buffer_dataset import NStepsLowDimReplayBufferDataset
+    from drl.blocks.memory.replay_buffer import ReplayBuffer
+
+    # ENV = gym.make('CartPole-v0')
+    replay_buffer = ReplayBuffer()
+        
+    state = ENV.reset()
+    for _ in range(10000):
+        action = ENV.action_space.sample()
+        next_state, reward, done, _ = ENV.step(action)
+        if done:
+            state = ENV.reset()
+        else:
+            state = next_state
+        replay_buffer.append(state, reward, next_state, action, done)
+
+    dataset = NStepsLowDimReplayBufferDataset(replay_buffer, horizon=3, batch_size=2)
+    dataloader = DataLoader(dataset, collate_fn=dataset.collate_fn)
+
+    # for batch in dataloader:
+    #     print(batch)
+    batch = next(iter(dataloader))
+
+# test_low_dim_replay_buffer_dataset_batch()

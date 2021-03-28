@@ -46,6 +46,8 @@ class Agent(pl.LightningModule):
 
     def setup_environment(self, env_cfg):
         openai_env = gym.make(env_cfg.env_name)
+        if env_cfg.wrapper:
+            openai_env = instantiate(env_cfg, env=openai_env)
         self._env = Environment(env=openai_env)
 
     def setup_train_dataloader(self, train_cfg):
