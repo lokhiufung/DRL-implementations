@@ -2,20 +2,68 @@ import os
 
 import numpy as np
 import torch
+import torch.nn as nn
+from annoy import AnnoyIndex
 
 
-class DifferentiableNeuralDict(object):
-    def __init__(self, capacity: int=10000):
+class DifferentiableNeuralDict(nn.Module):
+    def __init__(
+        self,
+        dim,
+        kernel_function='inverse_distance',
+        capacity: int=10000,
+        n_trees: int=10
+    ):
+        super().__init__()
+
         self.capacity = capacity
+        self.dim = dim
+        self.n_trees = n_trees
+        self.kernel_function = kernel_function
+        self.key_buffer = []
+        self.value_buffer = []
 
-    def lookup(self, embed):
-        pass
+        self.search_engine = None  # will be initialized after getting samples in buffer
+
+    def forward(self, key):
+        value = self.lookup(key)
+        return value
+
+    def lookup(self, key, n_neighbors=50, delta=1e-3):
+        if self.search_engine is not None:
+            indexes, distances = self.search_engine.get_nns_by_vector(
+                key,
+                n=n_neighbors,
+                include_distance=True,
+            )
+            retrieved_keys = [self.key_buffer[index] for index in indexes]
+            retrieved_values = [self.value_buffer[index] for index in indexes]
+
+            weights = 1 / (torch.pow(key - retrieved_keys, exponent=2) + delta)
+            weights_total = torch.sum(weights, dim=-1)
+
+            retrieved_values = torch.from_numpy(retrieved_values)
+            output_value = torch.sum(weights * retrieved_values)
+            return output_value
+        else:
+            raise AttributeError('Plesae make sure `self.key_buffer` and `self.value_buffer` are not empty.')  
 
     def write(self):
         pass
 
+    def write_to_buffer(self):
+        pass
     
-
+    def _build_search_engine(self):
+        assert len(self.key_buffer) > 1
+        self.search_engine = AnnoyIndex(self.dim, 'angular')
+        for i, key in enumerate(key_buffer):
+            self.search_engine.add_item(i, key)
+        
+        self.search_engine.build(self.n_trees)
+    
+    
+    
 
 class DND(object):
     """

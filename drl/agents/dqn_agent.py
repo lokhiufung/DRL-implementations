@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from drl.core.agent import Agent
+from drl.core.agent import Ageznt
 from drl.core.decorators import take_agent_step
 from drl.blocks.memory.replay_buffer import ReplayBuffer
 from drl.datasets.replay_buffer_dataset import LowDimReplayBufferDataset

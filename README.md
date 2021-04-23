@@ -54,4 +54,8 @@ RuntimeError: invalid multinomial distribution (encountering probability entry <
 - [ a3c ] no improvement in early epidsodes; very unstable
 - [ nec ] nec should start with random warmup steps to make sure that there are experiences in each dnd
 - [ nec ] set root mean square of diff (over dimensions) to get similarity_threshold (~238 for diff=0.01)
-- [ nec ] it is not possible to use DND alone. The projected vector with a randomly initized weights do not preserve the same neighbors in original space and in projected space. The keys (projected vectors) queried do not preserve the same group of neighors in raw state space. Therefore, the aggregated values may not be appropriate. (values are mixed with 'fake-neighbors') 
+- [ nec ] it is not possible to use DND alone. The projected vector with a randomly initized weights do not preserve the same neighbors in original space and in projected space. The keys (projected vectors) queried do not preserve the same group of neighors in raw state space. Therefore, the aggregated values may not be appropriate. (values are mixed with 'fake-neighbors')
+
+
+## TODO
+1. migrate/rebuild a RLlib (ray backend) ??
