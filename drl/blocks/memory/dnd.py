@@ -12,6 +12,7 @@ class DifferentiableNeuralDict(nn.Module):
         dim,
         kernel_function='inverse_distance',
         capacity: int=10000,
+        n_neighbors: int=50,
         n_trees: int=10
     ):
         super().__init__()
@@ -19,9 +20,12 @@ class DifferentiableNeuralDict(nn.Module):
         self.capacity = capacity
         self.dim = dim
         self.n_trees = n_trees
+        self.n_neighbors = n_neighbors
         self.kernel_function = kernel_function
+        # `self.keys`, `self.values` are for tensor storing
         self.keys = []
         self.values = []
+        # `self.key_buffer`, `self.value_buffer` are for building search engine
         self.key_buffer = []
         self.value_buffer = []
 
@@ -31,22 +35,36 @@ class DifferentiableNeuralDict(nn.Module):
         value = self.lookup(key)
         return value
 
-    def lookup(self, key, n_neighbors=50, delta=1e-3):
+    def lookup(self, key: torch.Tensor, n_neighbors: int=50, delta: float=1e-3):
         if self.search_engine is not None:
-            indexes, distances = self.search_engine.get_nns_by_vector(
-                key,
-                n=n_neighbors,
-                include_distance=True,
-            )
-            retrieved_keys = [self.keys[index] for index in indexes]
-            retrieved_values = [self.values[index] for index in indexes]
+            batch_size = key.size(0)  # get batch_size from `key` Tensor
+
+            search_keys = key.cpu().numpy()
+            retrieved_keys = []
+            retrieved_values = []
+            for i in range(batch_size):
+                indexes, distances = self.search_engine.get_nns_by_vector(
+                    search_keys[i],
+                    n=self.n_neighbors,
+                    include_distances=True,
+                )
+                retrieved_keys.append(torch.cat([self.keys[index] for index in indexes], dim=0).view(1, self.n_neighbors, self.dim))
+                retrieved_values.append(torch.cat([self.values[index] for index in indexes], dim=0).view(1, self.n_neighbors))  # (self.n_neighbors, 1)
+
+            retrieved_keys = torch.cat(retrieved_keys, dim=0)
+            retrieved_values = torch.cat(retrieved_values, dim=0)
+            print('key: ', key.size())
+            print('retrieved_keys: ', retrieved_keys.size())
+            print('retrieved_values: ', retrieved_values.size())
+            key = key.view(batch_size, 1, self.dim)
 
             if self.kernel_function == 'inverse_distance':
-                weights = 1 / (torch.pow(key - retrieved_keys, exponent=2) + delta)
-                weights_total = torch.sum(weights, dim=-1)
-
-                retrieved_values = torch.from_numpy(retrieved_values)
-                output_value = torch.sum(weights * retrieved_values)
+                weights = 1 / (torch.sum((key - retrieved_keys)**2, dim=-1) + delta)  # (self.batch_size, n_neighbors, self.dim)
+                weights_total = torch.sum(weights, dim=-1, keepdim=True)  # (self.batch_size, self.n_neighbors)
+                print('key - retrieved_keys: ', (key - retrieved_keys).size())
+                print('weights: ', weights.size())
+                print('weights_total: ', weights_total.size())
+                output_value = torch.matmul(weights, retrieved_values) / weights_total  # (self.batch_size, 1)
             else:
                 raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
             return output_value
@@ -55,146 +73,39 @@ class DifferentiableNeuralDict(nn.Module):
 
     def write(self):
         # update keys and values as the parameters
-        self.keys = nn.ParameterList([nn.Parameter(key, requires_grad=True) for key in self.key_buffer])
-        self.values = nn.ParameterList([nn.Parameter(value, requires_grad=True) for value in self.value_buffer])
+        self.keys = nn.ParameterList([nn.Parameter(torch.from_numpy(key).view(1, -1), requires_grad=True) for key in self.key_buffer])
+        self.values = nn.ParameterList([nn.Parameter(torch.from_numpy(value).view(1, -1), requires_grad=True) for value in self.value_buffer])
 
         # build new search engine with latest `self.key_buffer` and `self.value_buffer`
         self._build_search_engine()
 
-    def write_to_buffer(self, key, value):
+    def write_to_buffer(self, key: torch.Tensor, value: torch.Tensor):
+        key = key.detach().cpu().numpy()
+        value = value.detach().cpu().numpy()
+
         self.key_buffer.append(key)
         self.value_buffer.append(value)
     
     def _build_search_engine(self):
         assert len(self.key_buffer) > 1
         self.search_engine = AnnoyIndex(self.dim, 'angular')
-        for i, key in enumerate(key_buffer):
+        for i, key in enumerate(self.key_buffer):
             self.search_engine.add_item(i, key)
         
         self.search_engine.build(self.n_trees)
     
     
+if __name__ == '__main__':
+    dnd = DifferentiableNeuralDict(
+        dim=64
+    )
+
+    for _ in range(60):
+        dnd.write_to_buffer(key=torch.normal(mean=0.0, std=1.0, size=(64,)), value=torch.tensor(0.3))
     
+    dnd.write()
 
-class DND(object):
-    """
-    differentiable neural dictionary; should  be differentiable
-    """
-    def __init__(self, encode_dim, capacity, p=50, similarity_threshold=238.0, alpha=0.5):
-        self.encode_dim = encode_dim
-        self.capacity = capacity
-        self.p = p  # num of knn
-        self.similarity_threshold = similarity_threshold
-        self.alpha = alpha
-
-        self.similarity_avg = 0.0 
-        self.keys = []
-        self.values = []
-
-    def __len__(self):
-        return len(self.keys)
-
-    def __getitem__(self, index):
-        return self.keys[index], self.values[index]
-
-    def append(self, encoded_state, n_steps_q):
-        # if not self.exist_state(encoded_state): 
-        self.keys.append(encoded_state)
-        self.values.append(n_steps_q)
-        # else:
-        #     # update when state not exist 
-        #     # logger.debug('state already existed')
-        #     top_k_weights, top_k_index = self.query_k(encoded_state, k=1)
-        #     self.values[top_k_index] = self.values[top_k_index] + self.alpha * (n_steps_q - self.values[top_k_index]) 
-        # remove oldest memory if capacity is rearched
-        # if len(self) >= self.capacity:
-        #     self.keys.pop(0)
-        #     self.values.pop(0)
-
-        # else:
-        #     _, index = self.query(encoded_state, 1)  # get the index of exist_state
-        #     self.values[index] = n_steps_q
-
-    def query_k(self, encoded_state, k):
-        """
-        Need to be differentiable
-        args:
-            encoded_state: tensor, size=(encoded_dim,), required_grad = True
-            k: int, number of neighbors
-        return:
-            top_k_weights: weights of top k neighbors
-            top_k_index: indexs of top k neighbors
-        """
-        weights = self.get_weights(encoded_state)
-        top_k_weights, top_k_index = torch.topk(weights, k)
-        return top_k_weights, top_k_index
-
-    def exist_state(self, encoded_state):
-        """
-        encoded_state: tensor
-
-        return bool 
-        """
-        if len(self.keys) > 0:
-            keys = torch.cat(self.keys, dim=0)  # stack: stack on new axis; cat: cat on existing axis
-            similarities = self.kernel_function(encoded_state, keys)
-            max_state = similarities.max(-1)
-            similarity = max_state[0].item()
-            index = max_state[1].item()
-            # logger.debug('similarity: {} encoded_state: {} closest_state: {}'.format(similarity, encoded_state, self.keys[index]))
-            if similarity > self.similarity_threshold:
-                return True
-        return False
-
-    def get_max_n_steps_q(self):
-        assert len(self.values) > 0
-        return max(self.values)
-
-    def get_expected_n_steps_q(self, encoded_state):
-        """
-        produce a differentiable query
-        encoded_state: tensor, require_grad = True
-        """q
-        assert len(self.keys) >= self.p
-        queried = self.query_k(encoded_state, k=self.p)
-        top_k_weights, top_k_index = queried 
-        queried_values = torch.tensor(self.values, dtype=torch.float32)[top_k_index]
-        n_steps_q = torch.sum(queried_values * top_k_weights).item()
-        return n_steps_q
-
-    def get_weights(self, encoded_state):
-        """
-        Need to be differentiable
-        args:
-            encoded_state: tensor, size=(encoded_dim,)
-        return:
-            weights: weights of each value, sum to 1; size=(keys_size,)
-        """
-        keys = torch.cat(self.keys, dim=0)  # stack: stack on new axis; cat: cat on existing axis
-        similarities = self.kernel_function(encoded_state, keys)
-        weights = similarities / torch.sum(similarities)
-        return weights
-    
-    def save(self, output_dir, id_):
-        torch.save(
-            self.keys,
-            os.path.join(output_dir, f'dnd_{id_}_keys.pt')
-            )
-        torch.save(
-            self.values,
-            os.path.join(output_dir, f'dnd_{id_}_values.pt')
-            )
-
-    def load(self, checkpoint_dir, id_):
-        self.keys = torch.load(os.path.join(checkpoint_dir, f'dnd_{id_}_keys.pt'))
-        self.values = torch.load(os.path.join(checkpoint_dir, f'dnd_{id_}_values.pt'))
-
-    @staticmethod
-    def kernel_function(encoded_state, keys):
-        """
-        encoded_state: tensor, size = (encoded_dim,)
-        keys: tensor, size = (keys_size, encoded_dim)
-        """
-        difference = encoded_state - keys
-        distance = difference.norm(dim=-1).pow(2)
-        return 1 / (distance + 1e-3)
+    output_value = dnd.lookup(
+        key=torch.normal(mean=0.0, std=1.0, size=(10, 64)),
+    )
+    print(output_value)
