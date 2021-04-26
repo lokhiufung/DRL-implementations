@@ -20,6 +20,8 @@ class DifferentiableNeuralDict(nn.Module):
         self.dim = dim
         self.n_trees = n_trees
         self.kernel_function = kernel_function
+        self.keys = []
+        self.values = []
         self.key_buffer = []
         self.value_buffer = []
 
@@ -36,23 +38,32 @@ class DifferentiableNeuralDict(nn.Module):
                 n=n_neighbors,
                 include_distance=True,
             )
-            retrieved_keys = [self.key_buffer[index] for index in indexes]
-            retrieved_values = [self.value_buffer[index] for index in indexes]
+            retrieved_keys = [self.keys[index] for index in indexes]
+            retrieved_values = [self.values[index] for index in indexes]
 
-            weights = 1 / (torch.pow(key - retrieved_keys, exponent=2) + delta)
-            weights_total = torch.sum(weights, dim=-1)
+            if self.kernel_function == 'inverse_distance':
+                weights = 1 / (torch.pow(key - retrieved_keys, exponent=2) + delta)
+                weights_total = torch.sum(weights, dim=-1)
 
-            retrieved_values = torch.from_numpy(retrieved_values)
-            output_value = torch.sum(weights * retrieved_values)
+                retrieved_values = torch.from_numpy(retrieved_values)
+                output_value = torch.sum(weights * retrieved_values)
+            else:
+                raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
             return output_value
         else:
             raise AttributeError('Plesae make sure `self.key_buffer` and `self.value_buffer` are not empty.')  
 
     def write(self):
-        pass
+        # update keys and values as the parameters
+        self.keys = nn.ParameterList([nn.Parameter(key, requires_grad=True) for key in self.key_buffer])
+        self.values = nn.ParameterList([nn.Parameter(value, requires_grad=True) for value in self.value_buffer])
 
-    def write_to_buffer(self):
-        pass
+        # build new search engine with latest `self.key_buffer` and `self.value_buffer`
+        self._build_search_engine()
+
+    def write_to_buffer(self, key, value):
+        self.key_buffer.append(key)
+        self.value_buffer.append(value)
     
     def _build_search_engine(self):
         assert len(self.key_buffer) > 1
