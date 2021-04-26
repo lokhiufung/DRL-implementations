@@ -1,4 +1,5 @@
 import os
+from typing import Union
 
 import numpy as np
 import torch
@@ -6,20 +7,22 @@ import torch.nn as nn
 from annoy import AnnoyIndex
 
 
-class DifferentiableNeuralDict(nn.Module):
+class DifferentiableNeuralDictionary(nn.Module):
     def __init__(
         self,
         dim,
         kernel_function='inverse_distance',
         capacity: int=10000,
         n_neighbors: int=50,
-        n_trees: int=10
+        n_trees: int=10,
+        delta: float=1e-3,
     ):
         super().__init__()
 
         self.capacity = capacity
         self.dim = dim
         self.n_trees = n_trees
+        self.delta = delta
         self.n_neighbors = n_neighbors
         self.kernel_function = kernel_function
         # `self.keys`, `self.values` are for tensor storing
@@ -31,11 +34,16 @@ class DifferentiableNeuralDict(nn.Module):
 
         self.search_engine = None  # will be initialized after getting samples in buffer
 
-    def forward(self, key):
-        value = self.lookup(key)
+    def lookup(self, key: Union[torch.Tensor, np.ndarray], return_tensor=True):
+        if isinstance(key, np.ndarray):
+            key = torch.from_numpy(key).view(1, -1)
+        with torch.no_grad():
+            value = self.forward(key)
+            if not return_tensor:
+                value = torch.squeeze(value).cpu().item()
         return value
 
-    def lookup(self, key: torch.Tensor, n_neighbors: int=50, delta: float=1e-3):
+    def forward(self, key: torch.Tensor):
         if self.search_engine is not None:
             batch_size = key.size(0)  # get batch_size from `key` Tensor
 
@@ -53,18 +61,20 @@ class DifferentiableNeuralDict(nn.Module):
 
             retrieved_keys = torch.cat(retrieved_keys, dim=0)
             retrieved_values = torch.cat(retrieved_values, dim=0)
-            print('key: ', key.size())
-            print('retrieved_keys: ', retrieved_keys.size())
-            print('retrieved_values: ', retrieved_values.size())
+            # print('key: ', key.size())
+            # print('retrieved_keys: ', retrieved_keys.size())
+            # print('retrieved_values: ', retrieved_values.size())
             key = key.view(batch_size, 1, self.dim)
 
             if self.kernel_function == 'inverse_distance':
-                weights = 1 / (torch.sum((key - retrieved_keys)**2, dim=-1) + delta)  # (self.batch_size, n_neighbors, self.dim)
+                weights = 1 / (torch.sum((key - retrieved_keys)**2, dim=-1) + self.delta)  # (self.batch_size, n_neighbors, self.dim)
                 weights_total = torch.sum(weights, dim=-1, keepdim=True)  # (self.batch_size, self.n_neighbors)
-                print('key - retrieved_keys: ', (key - retrieved_keys).size())
-                print('weights: ', weights.size())
-                print('weights_total: ', weights_total.size())
-                output_value = torch.matmul(weights, retrieved_values) / weights_total  # (self.batch_size, 1)
+                # print('key - retrieved_keys: ', (key - retrieved_keys).size())
+                # print('weights: ', weights.size())
+                # print('weights_total: ', weights_total.size())
+                output_value = torch.sum(weights * retrieved_values, dim=-1, keepdim=True)
+                print(output_value.size())
+                output_value = output_value / weights_total  # (self.batch_size, 1)
             else:
                 raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
             return output_value
@@ -96,16 +106,22 @@ class DifferentiableNeuralDict(nn.Module):
     
     
 if __name__ == '__main__':
-    dnd = DifferentiableNeuralDict(
+    import time
+
+
+    dnd = DifferentiableNeuralDictionary(
         dim=64
     )
 
-    for _ in range(60):
+    for _ in range(10000):
         dnd.write_to_buffer(key=torch.normal(mean=0.0, std=1.0, size=(64,)), value=torch.tensor(0.3))
     
     dnd.write()
 
+    start = time.perf_counter()
     output_value = dnd.lookup(
-        key=torch.normal(mean=0.0, std=1.0, size=(10, 64)),
+        key=torch.normal(mean=0.0, std=1.0, size=(1, 64)),
     )
-    print(output_value)
+    end = time.perf_counter()
+    print(output_value.size())
+    print('total time: {}'.format(end - start))
