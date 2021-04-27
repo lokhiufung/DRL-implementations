@@ -22,12 +22,18 @@ class ConvEncoder(nn.Module):
             kernel_size=4,
             stride=2,
         )
+
+        def conv2d_size_out(size, kernel_size=5, stride=2):
+            return (size - (kernel_size - 1) -1) // stride + 1
+        convw = conv2d_size_out(conv2d_size_out(90))
+    
         self.relu2 = nn.ReLU()
         self.fc = nn.Linear(
             out_features=256
         )
         self.relu3 = nn.ReLU()
-        
+
+    
     def forward(self, x):
         x = self.conv1(x)
         x = self.relu1(x)

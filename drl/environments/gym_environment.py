@@ -6,7 +6,7 @@ from drl.core.utils import name_import
 
 class GymEnvironment(gym.Env, Environment):
     """"""
-    def __init__(self, env_name, apply_wrapper=None):
+    def __init__(self, env_name):
         self.env_name = env_name
         self._env = gym.make(self.env_name)
         if apply_wrapper is not None:
