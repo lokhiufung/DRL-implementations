@@ -1,5 +1,5 @@
 import os
-from typing import Union
+from typing import Union, List, Tuple
 
 import numpy as np
 import torch
@@ -7,7 +7,75 @@ import torch.nn as nn
 from annoy import AnnoyIndex
 
 
+__all__ = ['DifferentiableNeuralDictionary']
+
+
 class DifferentiableNeuralDictionary(nn.Module):
+    def __init__(
+        self,
+        n_actions
+        dim,
+        kernel_function='inverse_distance',
+        capacity: int=10000,
+        n_neighbors: int=50,
+        n_trees: int=10,
+        delta: float=1e-3,
+    ):
+        super().__init__()
+        self.n_actions = n_actions
+
+        self.capacity = capacity
+        self.dim = dim
+        self.n_trees = n_trees
+        self.delta = delta
+        self.n_neighbors = n_neighbors
+        self.kernel_function = kernel_function
+
+        self.dnds = []
+        for i in range(self.n_actions):
+            dnds.append(_DifferentiableNeuralDictionary(
+                dim=self.dim,
+                kernel_function=self.kernel_function,
+                capacity=self.capacity,
+                n_neighbors=self.n_neighbors,
+                n_trees=self.n_trees,
+                delta=self.delta
+            ))
+        self.dnds = nn.ModuleList(self.dnds)
+
+    def lookup(
+        self,
+        key: Union[torch.Tensor, np.ndarray],
+        return_tensor=True,
+        return_all_values=False
+    ) -> Union[Tuple[torch.Tensor, torch.LongTensor], Tuple[np.ndarray, np.ndarray]]:
+        
+        values = [self.dnds.lookup(key, return_tensor) for i in range(self.n_actions)]
+        values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
+        max_values, actions = torch.max(values, dim=-1, keepdim=True)
+        if return_all_values:
+            return (values, actions) if return_tensor else (values.cpu().numpy(), actions.cpu().numpy())
+        else:
+            return (max_values, actions) if return_tensor else (max_values.cpu().numpy(), actions.cpu().numpy())
+
+    def forward(self, key: Union[torch.Tensor, np.ndarray], return_all_values=False) -> Tuple[torch.Tensor, torch.LongTensor]:
+        values = [self.dnds.lookup(key, return_tensor) for i in range(self.n_actions)]
+        values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
+        max_values, actions = torch.max(values, dim=-1, keepdim=True)
+        if return_all_values:
+            return values, actions
+        else:
+            return max_values, actions
+
+    def write(self):
+        for i in range(self.action):
+            self.dnds[i].write()
+
+    def write_to_buffer(self, action, key, value):
+        self.dnds[action].write_to_buffer(key, buffer)
+
+
+class _DifferentiableNeuralDictionary(nn.Module):
     def __init__(
         self,
         dim,
@@ -40,7 +108,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         with torch.no_grad():
             value = self.forward(key)
             if not return_tensor:
-                value = torch.squeeze(value).cpu().item()
+                value = value.cpu().numpy()
         return value
 
     def forward(self, key: torch.Tensor):

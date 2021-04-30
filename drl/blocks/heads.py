@@ -2,7 +2,7 @@
 from torch import nn
 
 
-class ValueHead(nn.Module):
+class FCValueHead(nn.Module):
     def __init__(self, output_dim, hidden_dim, activation=None):
         super(ValueHead, self).__init__()
         self.output_dim = output_dim
@@ -14,6 +14,11 @@ class ValueHead(nn.Module):
     
     def forward(self, embedding):
         return self.model(embedding)
+
+
+class NoOpValueHead(nn.Module):
+    def forward(self, values):
+        return values
 
 
 class SoftmaxPolicyHead(nn.Module):

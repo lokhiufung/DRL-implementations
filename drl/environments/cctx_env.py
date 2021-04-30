@@ -1,6 +1,7 @@
 import gym
 import ccxt
 
+
 class Action(object):
     def __init__(self, type_):
         self.type = type_
@@ -14,7 +15,6 @@ class PlaceOrder(Action):
         self.order_type = order_type
         self.side = side
     
-
 
 class CcxtSingleInstrumentTradingEnv(gym.Env):
     def __init__(self, exchange: ccxt.Exchange, symbol: str):
@@ -47,3 +47,5 @@ class CcxtSingleInstrumentTradingEnv(gym.Env):
 
 
         balance = self.exchange.fetch_total_balance()
+    
+    
