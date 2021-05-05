@@ -74,6 +74,9 @@ class DifferentiableNeuralDictionary(nn.Module):
     def write_to_buffer(self, action, key, value):
         self.dnds[action].write_to_buffer(key, buffer)
 
+    def update_value(self):
+        pass
+
 
 class _DifferentiableNeuralDictionary(nn.Module):
     def __init__(
@@ -163,7 +166,10 @@ class _DifferentiableNeuralDictionary(nn.Module):
 
         self.key_buffer.append(key)
         self.value_buffer.append(value)
-    
+
+    def update_value(self):
+        pass
+
     def _build_search_engine(self):
         assert len(self.key_buffer) > 1
         self.search_engine = AnnoyIndex(self.dim, 'angular')
