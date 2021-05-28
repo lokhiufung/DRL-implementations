@@ -45,7 +45,7 @@ class ReplayBuffer(nn.Module):
         for index in batch_indexes:
             n_step_reward = 0.0
             for i in range(n_steps):
-                if self.buffer[index].done) or (index + i < len(self.buffer)):
+                if (self.buffer[index].done) or (index + i < len(self.buffer)):
                     break
                 n_step_reward += (gamma**i) * self.buffer[index+i]
             batch.append(

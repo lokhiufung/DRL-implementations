@@ -1,8 +1,11 @@
 import os
+import time
 from typing import Union, List, Tuple
 
 import numpy as np
+from numpy.core.defchararray import index
 import torch
+from torch._C import Value
 import torch.nn as nn
 from annoy import AnnoyIndex
 
@@ -13,7 +16,7 @@ __all__ = ['DifferentiableNeuralDictionary']
 class DifferentiableNeuralDictionary(nn.Module):
     def __init__(
         self,
-        n_actions
+        n_actions,
         dim,
         kernel_function='inverse_distance',
         capacity: int=10000,
@@ -33,7 +36,7 @@ class DifferentiableNeuralDictionary(nn.Module):
 
         self.dnds = []
         for i in range(self.n_actions):
-            dnds.append(_DifferentiableNeuralDictionary(
+            self.dnds.append(_DifferentiableNeuralDictionary(
                 dim=self.dim,
                 kernel_function=self.kernel_function,
                 capacity=self.capacity,
@@ -50,7 +53,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         return_all_values=False
     ) -> Union[Tuple[torch.Tensor, torch.LongTensor], Tuple[np.ndarray, np.ndarray]]:
         
-        values = [self.dnds.lookup(key, return_tensor) for i in range(self.n_actions)]
+        values = [self.dnds[i].lookup(key, return_tensor) for i in range(self.n_actions)]
         values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
         if return_all_values:
@@ -59,7 +62,7 @@ class DifferentiableNeuralDictionary(nn.Module):
             return (max_values, actions) if return_tensor else (max_values.cpu().numpy(), actions.cpu().numpy())
 
     def forward(self, key: Union[torch.Tensor, np.ndarray], return_all_values=False) -> Tuple[torch.Tensor, torch.LongTensor]:
-        values = [self.dnds.lookup(key, return_tensor) for i in range(self.n_actions)]
+        values = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
         values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
         if return_all_values:
@@ -68,11 +71,11 @@ class DifferentiableNeuralDictionary(nn.Module):
             return max_values, actions
 
     def write(self):
-        for i in range(self.action):
+        for i in range(self.n_actions):
             self.dnds[i].write()
 
     def write_to_buffer(self, action, key, value):
-        self.dnds[action].write_to_buffer(key, buffer)
+        self.dnds[action].write_to_buffer(key, value)
 
     def update_value(self):
         pass
@@ -102,6 +105,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         # `self.key_buffer`, `self.value_buffer` are for building search engine
         self.key_buffer = []
         self.value_buffer = []
+        self.last_visit_time = {}
 
         self.search_engine = None  # will be initialized after getting samples in buffer
 
@@ -121,14 +125,20 @@ class _DifferentiableNeuralDictionary(nn.Module):
             search_keys = key.cpu().numpy()
             retrieved_keys = []
             retrieved_values = []
+            retrieved_indexes = []
             for i in range(batch_size):
                 indexes, distances = self.search_engine.get_nns_by_vector(
                     search_keys[i],
                     n=self.n_neighbors,
                     include_distances=True,
                 )
-                retrieved_keys.append(torch.cat([self.keys[index] for index in indexes], dim=0).view(1, self.n_neighbors, self.dim))
-                retrieved_values.append(torch.cat([self.values[index] for index in indexes], dim=0).view(1, self.n_neighbors))  # (self.n_neighbors, 1)
+                retrieved_keys.append(torch.cat([self.keys[index] for index in indexes], dim=0).view(1, min(self.n_neighbors, len(indexes)), self.dim))
+                retrieved_values.append(torch.cat([self.values[index] for index in indexes], dim=0).view(1, min(self.n_neighbors, len(indexes))))  # (self.n_neighbors, 1)
+                retrieved_indexes.append(indexes)
+                
+                # update indexes last visit time
+                for index in indexes:
+                    self.last_visit_time[index] = time.perf_counter()
 
             retrieved_keys = torch.cat(retrieved_keys, dim=0)
             retrieved_values = torch.cat(retrieved_values, dim=0)
@@ -144,7 +154,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 # print('weights: ', weights.size())
                 # print('weights_total: ', weights_total.size())
                 output_value = torch.sum(weights * retrieved_values, dim=-1, keepdim=True)
-                print(output_value.size())
+                # print(output_value.size())
                 output_value = output_value / weights_total  # (self.batch_size, 1)
             else:
                 raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
@@ -164,14 +174,27 @@ class _DifferentiableNeuralDictionary(nn.Module):
         key = key.detach().cpu().numpy()
         value = value.detach().cpu().numpy()
 
+        # when reached the max capacity, remove the oldest index before writing to the buffer
+        if len(self.key_buffer) >= self.capacity:
+            oldest_index = None
+            largest_visit_time = -1.0  # initialize visit time 
+            for index, last_visit_time in self.last_visit_time.items():
+                if last_visit_time > largest_visit_time:
+                    oldest_index = index
+            
+            # remove the oldest index
+            self.key_buffer.pop(oldest_index)
+            self.value_buffer.pop(oldest_index)
+        
         self.key_buffer.append(key)
         self.value_buffer.append(value)
 
-    def update_value(self):
-        pass
+    def update_value_by_index(self, indexes: List[int], values: List[float], alpha: float=1.0):
+        for index, value in zip(indexes, values):
+            self.values[index] += alpha * (value - self.values[index])
 
     def _build_search_engine(self):
-        assert len(self.key_buffer) > 1
+        assert len(self.key_buffer) > 1, ''
         self.search_engine = AnnoyIndex(self.dim, 'angular')
         for i, key in enumerate(self.key_buffer):
             self.search_engine.add_item(i, key)
