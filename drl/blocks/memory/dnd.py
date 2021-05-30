@@ -62,13 +62,15 @@ class DifferentiableNeuralDictionary(nn.Module):
             return (max_values, actions) if return_tensor else (max_values.cpu().numpy(), actions.cpu().numpy())
 
     def forward(self, key: Union[torch.Tensor, np.ndarray], return_all_values=False) -> Tuple[torch.Tensor, torch.LongTensor]:
-        values = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
-        values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
+        values_indexes = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
+        values = torch.cat([value_index[0] for value_index in values_indexes], dim=-1)  # concat to a single tensor (batch_size, n_actions)
+        indexes = [value_index[1] for value_index in values_indexes]  # should be cast to torch.Tensor?
+
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
         if return_all_values:
-            return values, actions
+            return values, actions, indexes
         else:
-            return max_values, actions
+            return max_values, actions, indexes
 
     def write(self):
         for i in range(self.n_actions):
@@ -77,9 +79,23 @@ class DifferentiableNeuralDictionary(nn.Module):
     def write_to_buffer(self, action, key, value):
         self.dnds[action].write_to_buffer(key, value)
 
-    def update_value(self):
-        pass
-
+    def update_values_by_indexes(self, actions: List[int], indexes: List[int], values: List[float], alpha: float=1.0):
+        grouped_indexes_values = {}
+        for i, action in enumerate(actions):
+            if action not in grouped_indexes_values:
+                grouped_indexes_values[action] = {}
+                grouped_indexes_values['value'] = []
+                grouped_indexes_values['index'] = []
+                
+            grouped_indexes_values[action]['value'].append(values[i])
+            grouped_indexes_values[action]['index'].append(indexes[i])
+        
+        for action, index_value in grouped_indexes_values.items():
+            self.dnds[action].update_values_by_indexes(
+                indexes=index_value['index'],
+                values=index_value['value']
+            )
+        
 
 class _DifferentiableNeuralDictionary(nn.Module):
     def __init__(
@@ -109,14 +125,14 @@ class _DifferentiableNeuralDictionary(nn.Module):
 
         self.search_engine = None  # will be initialized after getting samples in buffer
 
-    def lookup(self, key: Union[torch.Tensor, np.ndarray], return_tensor=True):
+    def lookup(self, key: Union[torch.Tensor, np.ndarray], return_tensor=True) -> Tuple[Union[torch.Tensor, np.ndarray], List[List[int]]]:
         if isinstance(key, np.ndarray):
             key = torch.from_numpy(key).view(1, -1)
         with torch.no_grad():
-            value = self.forward(key)
+            value, index = self.forward(key)
             if not return_tensor:
                 value = value.cpu().numpy()
-        return value
+        return value, index
 
     def forward(self, key: torch.Tensor):
         if self.search_engine is not None:
@@ -158,7 +174,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 output_value = output_value / weights_total  # (self.batch_size, 1)
             else:
                 raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
-            return output_value
+            return output_value, retrieved_indexes
         else:
             raise AttributeError('Plesae make sure `self.key_buffer` and `self.value_buffer` are not empty.')  
 
@@ -189,7 +205,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         self.key_buffer.append(key)
         self.value_buffer.append(value)
 
-    def update_value_by_index(self, indexes: List[int], values: List[float], alpha: float=1.0):
+    def update_values_by_indexes(self, indexes: List[int], values: List[float], alpha: float=1.0):
         for index, value in zip(indexes, values):
             self.values[index] += alpha * (value - self.values[index])
 
