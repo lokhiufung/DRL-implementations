@@ -1,5 +1,6 @@
 import os
 import time
+import math
 from typing import Union, List, Tuple
 
 import numpy as np
@@ -23,6 +24,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         n_neighbors: int=50,
         n_trees: int=10,
         delta: float=1e-3,
+        score_threshold: float=0.01
     ):
         super().__init__()
         self.n_actions = n_actions
@@ -33,6 +35,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         self.delta = delta
         self.n_neighbors = n_neighbors
         self.kernel_function = kernel_function
+        self.score_threshold = score_threshold
 
         self.dnds = []
         for i in range(self.n_actions):
@@ -42,7 +45,8 @@ class DifferentiableNeuralDictionary(nn.Module):
                 capacity=self.capacity,
                 n_neighbors=self.n_neighbors,
                 n_trees=self.n_trees,
-                delta=self.delta
+                delta=self.delta,
+                score_threshold=self.score_threshold
             ))
         self.dnds = nn.ModuleList(self.dnds)
 
@@ -53,24 +57,42 @@ class DifferentiableNeuralDictionary(nn.Module):
         return_all_values=False
     ) -> Union[Tuple[torch.Tensor, torch.LongTensor], Tuple[np.ndarray, np.ndarray]]:
         
-        values = [self.dnds[i].lookup(key, return_tensor) for i in range(self.n_actions)]
-        values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions)
+        values = []
+        indexes = []  # retrieved indexes
+        scores = []
+        for i in range(self.n_actions):
+            value, index, score = self.dnds[i].lookup(key, return_tensor)
+            values.append(value)
+            indexes.append(index)
+            scores.append(score)
+
+        # values = [self.dnds[i].lookup(key, return_tensor) for i in range(self.n_actions)]
+        values = torch.cat(values, dim=-1)  # concat to a single tensor (batch_size, n_actions) TODO: do not work with numpy array
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
         if return_all_values:
-            return (values, actions) if return_tensor else (values.cpu().numpy(), actions.cpu().numpy())
+            return (values, actions, indexes, scores) if return_tensor else (values.cpu().numpy(), actions.cpu().numpy(), indexes, scores)
         else:
-            return (max_values, actions) if return_tensor else (max_values.cpu().numpy(), actions.cpu().numpy())
+            return (max_values, actions, indexes, scores) if return_tensor else (max_values.cpu().numpy(), actions.cpu().numpy(), indexes, scores)
 
-    def forward(self, key: Union[torch.Tensor, np.ndarray], return_all_values=False) -> Tuple[torch.Tensor, torch.LongTensor]:
-        values_indexes = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
-        values = torch.cat([value_index[0] for value_index in values_indexes], dim=-1)  # concat to a single tensor (batch_size, n_actions)
-        indexes = [value_index[1] for value_index in values_indexes]  # should be cast to torch.Tensor?
+    def forward(self, key: Union[torch.Tensor, np.ndarray], return_all_values=False) -> Tuple[torch.Tensor, torch.LongTensor, List[torch.LongTensor]]:
+        values = []
+        indexes = []  # retrieved indexes e.g [torch.LongTensor([1, 2, 3 ....50]), ...]
+        scores = []
+        for i in range(self.n_actions):
+            value, index, score = self.dnds[i].lookup(key, return_tensor=True)
+
+            values.append(value)
+            indexes.append(index)
+            scores.append(score)
+
+        # values_indexes = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
+        values = torch.cat([value for value in values], dim=-1)  # concat to a single tensor (batch_size, n_actions)
 
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
         if return_all_values:
-            return values, actions, indexes
+            return values, actions, indexes, scores
         else:
-            return max_values, actions, indexes
+            return max_values, actions, indexes, scores
 
     def write(self):
         for i in range(self.n_actions):
@@ -79,21 +101,27 @@ class DifferentiableNeuralDictionary(nn.Module):
     def write_to_buffer(self, action, key, value):
         self.dnds[action].write_to_buffer(key, value)
 
-    def update_values_by_indexes(self, actions: List[int], indexes: List[int], values: List[float], alpha: float=1.0):
-        grouped_indexes_values = {}
+    def update_to_buffer(self, actions, keys: List[torch.Tensor], indexes: List[List[int]], scores: List[List[float]], values: List[float], alpha: float=1.0):
+        action_group = {}
         for i, action in enumerate(actions):
-            if action not in grouped_indexes_values:
-                grouped_indexes_values[action] = {}
-                grouped_indexes_values['value'] = []
-                grouped_indexes_values['index'] = []
+            if action not in action_group:
+                action_group[action] = {}
+                action_group[action]['values'] = []
+                action_group[action]['indexes'] = []
+                action_group[action]['keys'] = []
+                action_group[action]['scores'] = []
                 
-            grouped_indexes_values[action]['value'].append(values[i])
-            grouped_indexes_values[action]['index'].append(indexes[i])
-        
-        for action, index_value in grouped_indexes_values.items():
+            action_group[action]['values'].append(values[i])
+            action_group[action]['indexes'].append(indexes[i])
+            action_group[action]['keys'].append(keys[i])
+            action_group[action]['scores'].append(scores[i])
+
+        for action, group in action_group.items():
             self.dnds[action].update_values_by_indexes(
-                indexes=index_value['index'],
-                values=index_value['value']
+                indexes=group['indexes'],
+                values=group['values'],
+                keys=group['keys'],
+                scores=group['scores'],
             )
         
 
@@ -106,6 +134,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         n_neighbors: int=50,
         n_trees: int=10,
         delta: float=1e-3,
+        score_threshold: float=0.01
     ):
         super().__init__()
 
@@ -115,6 +144,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         self.delta = delta
         self.n_neighbors = n_neighbors
         self.kernel_function = kernel_function
+        self.score_threshold = score_threshold
         # `self.keys`, `self.values` are for tensor storing
         self.keys = []
         self.values = []
@@ -129,12 +159,14 @@ class _DifferentiableNeuralDictionary(nn.Module):
         if isinstance(key, np.ndarray):
             key = torch.from_numpy(key).view(1, -1)
         with torch.no_grad():
-            value, index = self.forward(key)
+            value, index, score = self.forward(key)
             if not return_tensor:
                 value = value.cpu().numpy()
-        return value, index
+                index = [idx.cpu().numpy() for idx in index]
+                score = [sc.cpu().numpy for sc in score]
+        return value, index, score
 
-    def forward(self, key: torch.Tensor):
+    def forward(self, key: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
         if self.search_engine is not None:
             batch_size = key.size(0)  # get batch_size from `key` Tensor
 
@@ -142,6 +174,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
             retrieved_keys = []
             retrieved_values = []
             retrieved_indexes = []
+            retrieved_scores = []
             for i in range(batch_size):
                 indexes, distances = self.search_engine.get_nns_by_vector(
                     search_keys[i],
@@ -150,8 +183,9 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 )
                 retrieved_keys.append(torch.cat([self.keys[index] for index in indexes], dim=0).view(1, min(self.n_neighbors, len(indexes)), self.dim))
                 retrieved_values.append(torch.cat([self.values[index] for index in indexes], dim=0).view(1, min(self.n_neighbors, len(indexes))))  # (self.n_neighbors, 1)
-                retrieved_indexes.append(indexes)
-                
+                retrieved_indexes.append(torch.tensor(indexes, dtype=torch.long))
+                retrieved_scores.append(torch.tensor(distances, dtype=torch.float32))
+
                 # update indexes last visit time
                 for index in indexes:
                     self.last_visit_time[index] = time.perf_counter()
@@ -174,7 +208,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 output_value = output_value / weights_total  # (self.batch_size, 1)
             else:
                 raise NotImplementedError('Only `inverse_distance` kernel function is supported.') 
-            return output_value, retrieved_indexes
+            return output_value, retrieved_indexes, retrieved_scores
         else:
             raise AttributeError('Plesae make sure `self.key_buffer` and `self.value_buffer` are not empty.')  
 
@@ -205,9 +239,15 @@ class _DifferentiableNeuralDictionary(nn.Module):
         self.key_buffer.append(key)
         self.value_buffer.append(value)
 
-    def update_values_by_indexes(self, indexes: List[int], values: List[float], alpha: float=1.0):
-        for index, value in zip(indexes, values):
-            self.values[index] += alpha * (value - self.values[index])
+    def update_to_buffer(self, keys: List[torch.Tensor], indexes: List[List[int]], scores: List[List[float]], values: List[float], alpha: float=1.0):
+        for key, index, score, value in zip(keys, indexes, scores, values):
+            if math.abs(max(score) - self.score_threshold) > self.score_threshold:
+                # if the index is already in dnd, update it using q update
+                closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score 
+                self.values[closest_idx] += alpha * (value - self.values[closest_idx])
+            else:
+                # else just write to the buffer
+                self.write_to_buffer(key, value)
 
     def _build_search_engine(self):
         assert len(self.key_buffer) > 1, ''

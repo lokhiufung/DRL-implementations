@@ -23,13 +23,15 @@ class NEC(nn.Module):
         self.replay_buffer = ReplayBuffer()
 
     def forward(self, x):
-        x = self.encoder(x)
-        values, action = self.dnd(x, return_all_values=True)
-        return values, action
+        key = self.encoder(x)
+        values, action, indexes, scores = self.dnd(x, return_all_values=True)
+        return key, values, action, indexes, scores
 
     @torch.no_grad()
     def play_step(self, state):
-        return self.dnd.lookup(self.encoder(state), return_all_values=False, return_tensor=True)
+        key = self.encoder(state)
+        values, action, indexes, scores = self.dnd.lookup(key, return_all_values=False, return_tensor=True) 
+        return key.cpu().numpy(), values, action, indexes, scores  
     
     def remember(self, state, action, reward, next_state, done):
         self.replay_buffer.append(state, action, reward, next_state, done)
@@ -46,7 +48,7 @@ def main():
 
     done = False
 
-    for episode in range(100):
+    for episode in range(30):
         state = env.reset()
         episode_reward = 0.0
         done = False
@@ -73,7 +75,7 @@ def main():
             try:
                 state = torch.from_numpy(transition_buffer[i+n_steps].state.astype(np.float32))
                 state = state.unsqueeze(dim=0)
-                q_bootstrap, _ = agent.play_step(state)
+                key, q_bootstrap, _, indexes, scores = agent.play_step(state)
                 q_bootstrap = q_bootstrap.item() 
                 # print('agent act')
                 # print('q_bootstrap: ', q_bootstrap)
@@ -87,15 +89,15 @@ def main():
             key = agent.encoder(torch.from_numpy(transition_buffer[i].state.astype(np.float32)))
             # print('key shape: ', key.size())
             q_estimate = torch.tensor(q_estimate, dtype=torch.float)
-            agent.dnd.write_to_buffer(transition_buffer[i].action, key, q_estimate)
+            # agent.dnd.write_to_buffer(transition_buffer[i].action, key, q_estimate)
+            agent.dnd.update_to_buffer()
             q_estimates.append(q_estimate)
             # print(f'[episode {episode}] q_estimate: {q_estimate}')
 
         # print(len(agent.dnd.dnds[0].key_buffer))
         # print(len(agent.dnd.dnds[1].key_buffer))
 
-        agent.dnd.write()
-        
+        # agent.dnd.write()
         total_time = time.perf_counter() - start
 
         # # learning
