@@ -117,7 +117,7 @@ class DifferentiableNeuralDictionary(nn.Module):
             action_group[action]['scores'].append(scores[i])
 
         for action, group in action_group.items():
-            self.dnds[action].update_values_by_indexes(
+            self.dnds[action].update_to_buffer(
                 indexes=group['indexes'],
                 values=group['values'],
                 keys=group['keys'],
@@ -241,7 +241,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
 
     def update_to_buffer(self, keys: List[torch.Tensor], indexes: List[List[int]], scores: List[List[float]], values: List[float], alpha: float=1.0):
         for key, index, score, value in zip(keys, indexes, scores, values):
-            if math.abs(max(score) - self.score_threshold) > self.score_threshold:
+            if abs(max(score) - self.score_threshold) > self.score_threshold:
                 # if the index is already in dnd, update it using q update
                 closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score 
                 self.values[closest_idx] += alpha * (value - self.values[closest_idx])

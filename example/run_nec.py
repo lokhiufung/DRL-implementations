@@ -72,11 +72,14 @@ def main():
                 
             reward = sum([gamma**step * transition_buffer[i+step].reward for step in range(n_steps)])
 
+            is_agent = False
             try:
                 state = torch.from_numpy(transition_buffer[i+n_steps].state.astype(np.float32))
                 state = state.unsqueeze(dim=0)
-                key, q_bootstrap, _, indexes, scores = agent.play_step(state)
-                q_bootstrap = q_bootstrap.item() 
+                key, q_bootstrap, _, index, score = agent.play_step(state)
+                q_bootstrap = q_bootstrap.item()
+                
+                is_agent = True
                 # print('agent act')
                 # print('q_bootstrap: ', q_bootstrap)
             except AttributeError:
@@ -90,14 +93,24 @@ def main():
             # print('key shape: ', key.size())
             q_estimate = torch.tensor(q_estimate, dtype=torch.float)
             # agent.dnd.write_to_buffer(transition_buffer[i].action, key, q_estimate)
-            agent.dnd.update_to_buffer()
+            if is_agent:
+                agent.dnd.update_to_buffer(
+                    keys=[key],
+                    actions=[transition_buffer[i].action],
+                    indexes=[index],
+                    scores=[score],
+                    values=[q_estimate],
+                )
+            else:
+                agent.dnd.write_to_buffer(transition_buffer[i].action, key, q_estimate)
+
             q_estimates.append(q_estimate)
             # print(f'[episode {episode}] q_estimate: {q_estimate}')
 
         # print(len(agent.dnd.dnds[0].key_buffer))
         # print(len(agent.dnd.dnds[1].key_buffer))
 
-        # agent.dnd.write()
+        agent.dnd.write()
         total_time = time.perf_counter() - start
 
         # # learning
