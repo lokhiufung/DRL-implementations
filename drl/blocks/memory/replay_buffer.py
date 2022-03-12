@@ -7,19 +7,24 @@ import torch
 import torch.nn as nn
 
 
+
 class ReplayBuffer(nn.Module):
-    def __init__(self, capacity=1e6):
+    
+    OUTPUT_TYPE = collections.namedtuple(
+            'Transition',
+            ['state', 'reward', 'next_state', 'action', 'done', 'n_steps'],
+        )
+    
+    def __init__(self, capacity=10**6):
         super().__init__()
 
-        self.capacity = int(capacity)
-        self.output_type = collections.namedtuple(
-            'Transition',
-            ['state', 'reward', 'next_state', 'action', 'done'],
-        )
+        self.output_type = self.OUTPUT_TYPE
+
+        self.capacity = capacity
         self.buffer = collections.deque(maxlen=self.capacity)  # once maxlen is rearched, the left sample will be poped out
 
-    def append(self, state, reward, next_state, action, done):
-        self.buffer.append(self.output_type(state, reward, next_state, action, done))
+    def append(self, state, reward, next_state, action, done, n_steps=1):
+        self.buffer.append(self.output_type(state, reward, next_state, action, done, n_steps))
 
     def get_batch(self, batch_size):
         """ Get randomly batched samples"""
@@ -44,17 +49,21 @@ class ReplayBuffer(nn.Module):
         
         for index in batch_indexes:
             n_step_reward = 0.0
+            n_steps = 0
             for i in range(n_steps):
-                if (self.buffer[index].done) or (index + i < len(self.buffer)):
+                n_step_reward += (gamma**i) * self.buffer[index+i].reward
+                n_steps = i + 1  # reminder: get the number of steps taken since the index
+                if (self.buffer[index].done) or (index + i >= len(self.buffer)):
+                    # if transit to terminal state or there is no next transition yet, break 
                     break
-                n_step_reward += (gamma**i) * self.buffer[index+i]
             batch.append(
                 self.output_type(
                     state=self.buffer[index].state,
                     reward=n_step_reward,
                     next_state=self.buffer[index].next_state,
                     action=self.buffer[index].action,
-                    done=self.buffer[index].done
+                    done=self.buffer[index].done,
+                    n_steps=n_steps
                 )
             )
             # single-line implementation
@@ -65,3 +74,17 @@ class ReplayBuffer(nn.Module):
     def __len__(self):
         return len(self.buffer)
 
+
+class NECReplayBuffer(ReplayBuffer):
+    
+    OUTPUT_TYPE = collections.namedtuple(
+        'Transition',
+        ['state', 'q_target', 'action'],
+    )
+
+    def append(self, state, q_target, action):
+        self.buffer.append(self.output_type(state, q_target, action))
+
+
+    
+    

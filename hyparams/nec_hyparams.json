@@ -16,7 +16,7 @@
             "alpha": 0.1,
             "episodes": 5000,
             "warmup_steps": 1000,
-            "horizon": 5
+            "n_step_reward": 5
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
     }
