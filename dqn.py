@@ -88,7 +88,8 @@ def main():
             # action = env.action_space.sample()
             # next_state, reward, done, info = env.step(action) # take a random action
             # logger.debug('episode: {} state: {} reward: {} action: {} next_state: {} done: {}'.format(episode, state, reward, action, next_state, done))
-            agent.remember(state, reward, action_tensor.item(), next_state, done)
+            # divided by 200 to make the maximum possible cummulative reward less than or equal to 1.
+            agent.remember(state, reward / 200.0, action_tensor.item(), next_state, done)
             # 2. test QNetwork
             # logger.debug('state_tensor: {} action_tensor: {} value_tensor: {}'.format(state_tensor, action_tensor, value_tensor))
             # logger.debug('state_tensor: {} action: {} value: {}'.format(state_tensor, action_tensor.item(), value_tensor.item()))
@@ -198,30 +199,19 @@ class DQNAgent(object):
         actions = torch.tensor([batch[i][2] for i in range(batch_size)], dtype=torch.long).unsqueeze(1)  # actions and states must share the same dimensions
         next_states = torch.tensor([batch[i][3] for i in range(batch_size)], dtype=torch.float32)
         dones = torch.tensor([batch[i][4] for i in range(batch_size)], dtype=torch.bool)
-        # print('state: {} rewards: {} actions: {} next_states: {} dones: {}'.format(states, rewards, actions, next_states, dones))
-        # print('output policy_netowrk: {}'.format(self.policy_network(states)))
         values = self.policy_network(states).gather(1, actions)  # Q_a value with a = argmax~a(Q)
-        # print('values: {}'.format(values))
         next_values = torch.zeros(batch_size, dtype=torch.float32)
-        # print('dones: {}'.format(dones))
-        # print('self.target_network(next_states).max(1)[0]: {}'.format(self.target_network(next_states).max(1)[0]))
         next_values[~dones] = self.target_network(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
-        # print('next_values: {}'.format(next_values))
         expected_next_values = rewards + self.gamma * next_values  # bellman's equation
-        # print('expected_next_values: {}'.format(expected_next_values.unsqueeze(1)))
         loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network
         
         self.optimizer.zero_grad()
         loss.backward()
-        # gradient clipping, (-1, 1)
-        # grad_norm = 0.0
         for param in self.policy_network.parameters():
             param.grad.data.clamp_(-1, 1)  # gradient cliping |grad| < = 1, clamp_ in-place original tensor, .data to get underlying tensor of a variable
             # grad_norm += param.grad.data.norm().item()**2 
         # self.writer.log_training(self.steps_done, loss, agent.lr, value_tensor.item(), target_value_tensor.item(), agent.epsilon)  # temp: self.steps_done == global_steps
         self.optimizer.step()
-        # self.steps_done += 1  # train step + 1
-        # self.epsilon_decay()
 
         return loss.item()#, grad_norm**0.5
 

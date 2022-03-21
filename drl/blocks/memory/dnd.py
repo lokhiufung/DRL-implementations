@@ -83,7 +83,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         indexes = []  # retrieved indexes e.g [torch.LongTensor([1, 2, 3 ....50]), ...]
         scores = []
         for i in range(self.n_actions):
-            value, index, score = self.dnds[i].lookup(key, return_tensor=True)
+            value, index, score = self.dnds[i](key)
 
             values.append(value)
             indexes.append(index)
@@ -91,8 +91,11 @@ class DifferentiableNeuralDictionary(nn.Module):
 
         # values_indexes = [self.dnds[i].lookup(key, return_tensor=True) for i in range(self.n_actions)]
         values = torch.cat([value for value in values], dim=-1)  # concat to a single tensor (batch_size, n_actions)
-
+        # print('values: ', values.size())
         max_values, actions = torch.max(values, dim=-1, keepdim=True)
+        # reminder: indexes and scores only contain index and score with the BEST action
+        indexes = [indexes[action] for action in actions]
+        scores = [scores[action] for action in actions]
         if return_all_values:
             return values, actions, indexes, scores
         else:
@@ -131,8 +134,9 @@ class DifferentiableNeuralDictionary(nn.Module):
     def get_max_value(self):
         """return the largest value over all dnds for all actions
         """
-        max_values = [dnd.get_max_value() for dnd in self.dnds]
-        max_value = max(max_values)
+        if self.is_ready():
+            max_values = [dnd.get_max_value() for dnd in self.dnds]
+            max_value = max(max_values)
         return max_value
 
     def is_ready(self):
@@ -193,7 +197,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         if self.search_engine is not None:
             batch_size = key.size(0)  # get batch_size from `key` Tensor
 
-            search_keys = key.cpu().numpy()
+            search_keys = key.detach().cpu().numpy()  # need to be detached before transforming to numpy
             retrieved_keys = []
             retrieved_values = []
             retrieved_indexes = []
@@ -247,6 +251,10 @@ class _DifferentiableNeuralDictionary(nn.Module):
     def write_to_buffer(self, key: torch.Tensor, value: torch.Tensor):
         key = key.detach().cpu().numpy()
         value = value.detach().cpu().numpy()
+
+        # reduce the null dim
+        key = np.squeeze(key)
+        value = np.squeeze(value)
 
         # when reached the max capacity, remove the oldest index before writing to the buffer
         if len(self.key_buffer) >= self.capacity:

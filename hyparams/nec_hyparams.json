@@ -8,14 +8,14 @@
             "epsilon_start": 0.9,
             "epsilon_end": 0.05,
             "decay_factor": 100.0,
-            "batch_size": 32,
+            "batch_size": 10,
             "replay_freq": 1,
             "memory_update_freq": 100,
             "p": 50,
             "similarity_threshold": 900.0,
             "alpha": 0.1,
             "episodes": 5000,
-            "warmup_steps": 1000,
+            "warmup_steps": 10,
             "n_step_reward": 5
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"

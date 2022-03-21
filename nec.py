@@ -22,14 +22,14 @@ logger = get_logger('nec', fh_lv='debug', ch_lv='debug')
 
 
 class NECNetwork(nn.Module):
-    def __init__(self, input_dim, n_actions, embedding_dim=16, p=50, similarity_threshold=0.5, alpha=1):
+    def __init__(self, input_dim, n_actions, embedding_dim=32, p=50, similarity_threshold=0.5, alpha=1):
         super().__init__()
         self.input_dim = input_dim
         self.n_actions = n_actions
         self.embedding_dim = embedding_dim
         self.dnd = DifferentiableNeuralDictionary(
             n_actions=n_actions,
-            dim=16,  # dim of embedding vector
+            dim=self.embedding_dim,  # dim of embedding vector
             n_neighbors=p,
             score_threshold=similarity_threshold,
             alpha=alpha,
@@ -49,9 +49,9 @@ class NECNetwork(nn.Module):
         Returns:
             _type_: _description_
         """
-        h = self.encoder(x)
-        max_values, actions, indexes, scores = self.dnd(h, return_all_values=return_all_values)
-        return max_values, actions, indexes, scores, h
+        keys = self.encoder(x)
+        values, actions, indexes, scores = self.dnd(keys, return_all_values=return_all_values)
+        return values, actions, indexes, scores, keys
 
     # def commit(self, actions, keys, values, scores):
     #     return self.dnd.update_to_buffer(actions, keys, values, scores)        
@@ -70,8 +70,22 @@ class NECNetwork(nn.Module):
         Returns:
             _type_: values, actions
         """
-        max_values, actions, indexes, scores = self.forward(x)
-        return max_values, actions, indexes, scores
+        max_values, actions, indexes, scores, keys = self.forward(x)
+        return max_values, actions, indexes, scores, keys
+
+    @torch.no_grad()
+    def encode(self, x: torch.TensorType):
+        """get the encoded state for inference
+
+        Args:
+            x (torch.TensorType): state tensor
+
+        Returns:
+            _type_: encoded state tensor
+        """
+        x = self.encoder(x)
+        return x
+
 
 
 class NECAgent:
@@ -126,59 +140,105 @@ class NECAgent:
             'values': [],
         }
 
-    def commit_single_to_dnd(self, action, key, index, score, value):
+    def commit_single_to_dnd(self, action, key, value, index=None, score=None):
+        """commit a single record to agent's dnd buffer
+        """
         self.cache_for_dnd['actions'].append(action)
-        self.cache_for_dnd['keys'].append(action)
-        self.cache_for_dnd['indexes'].append(action)
-        self.cache_for_dnd['scores'].append(action)
-        self.cache_for_dnd['values'].append(action)
+        self.cache_for_dnd['keys'].append(key)
+        self.cache_for_dnd['values'].append(value)
+        
+        if index is not None or score is not None:
+            assert index is not None and score is not None, 'Both index and socre must be provided.'
+
+            self.cache_for_dnd['indexes'].append(index)
+            self.cache_for_dnd['scores'].append(score)
     
     def push_to_dnd(self):
-        self.model.dnd.update_to_buffer(
-            actions=self.cache_for_dnd['actions'],
-            keys=self.cache_for_dnd['keys'],
-            indexes=self.cache_for_dnd['indexes'],
-            scores=self.cache_for_dnd['scores'],
-            values=self.cache_for_dnd['values']
-        )
+        if not self.model.dnd.is_ready():
+            # directly write to the dnd buffer if the dnd is not ready
+            # TODO: write_to_buffer method should handle batch writing
+            for i in range(len(self.cache_for_dnd['actions'])):
+                self.model.dnd.write_to_buffer(
+                    action=self.cache_for_dnd['actions'][i],
+                    key=self.cache_for_dnd['keys'][i],
+                    value=self.cache_for_dnd['values'][i],
+                )
+        else:
+            # if the dnd is ready, update the buffer with indexes, scores
+            self.model.dnd.update_to_buffer(
+                actions=self.cache_for_dnd['actions'],
+                keys=self.cache_for_dnd['keys'],
+                indexes=self.cache_for_dnd['indexes'],
+                scores=self.cache_for_dnd['scores'],
+                values=self.cache_for_dnd['values']
+            )
         # if success, reset the cache
         self._reset_cache_for_dnd()
 
+    def write_dnd(self):
+        self.model.dnd.write()
+
     def get_max_q(self):
-        return self.model.get_max_q()
+        if self.model.dnd.is_ready():
+            max_q = self.model.get_max_q()
+            max_q = max_q.item()
+            return max_q
+        else:
+            return 0.0  # reminder: if the dnd is not ready yet, just use 0.0 as the best value estimate
 
     def replay(self, batch_size):
-        # TODO: check the replay logic
-        batch = self.replay_buffer.get_batch(batch_size)
+        if self.model.dnd.is_ready():
+            # TODO: check the replay logic
+            batch = self.replay_buffer.get_batch(batch_size)
 
-        states = torch.tensor([batch[i].state for i in range(batch_size)])
-        actions = torch.tensor([batch[i].action for i in range(batch_size)])
-        q_targets = torch.tensor([batch[i].q_target for i in range(batch_size)])
+            # reminder: make sure to cast to float before creating the computation graph
+            states = torch.tensor([batch[i].state for i in range(batch_size)]).float()
+            actions = torch.tensor([batch[i].action for i in range(batch_size)]).long()
+            q_targets = torch.tensor([batch[i].q_target for i in range(batch_size)]).float()
 
-        qs, _, _, _, _ = self.model(states, return_all_values=True)
-        qs = qs[:, actions]
-        loss = F.mse_loss(qs, q_targets)
+            qs, _, _, _, _ = self.model(states, return_all_values=True)
+            
+            actions = actions.unsqueeze(-1)
+            qs = torch.gather(qs, 1, actions).squeeze()
+            # print('qs.shape: ', qs.size())
+            # TODO: dims of qs and q_targets do not match 
+            # print('q_targets.shape: ', q_targets.size())
+            loss = F.mse_loss(qs, q_targets)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        # gradient clipping
-        for param in self.model.parameters():
-            param.grad.data.clamp_(-1, 1)  # |grad| <= 1
-        self.optimizer.step()
+            self.optimizer.zero_grad()
+            loss.backward()
+            # gradient clipping
+            for param in self.model.parameters():
+                if param.grad is not None:  # some parameters in dnd do not have grad, since they are retrieved, TODO: verify this hypothesis
+                    param.grad.data.clamp_(-1, 1)  # |grad| <= 1
+            self.optimizer.step()
+        else:
+            logger.debug('dnd is not ready yet. Do not replay now.')
 
+    def encode(self, state):
+        if isinstance(state, np.ndarray):
+            state = torch.from_numpy(state)
+        h = self.model.encode(state)
+        return h
+        
     def greedy_infer(self, state):
         if isinstance(state, np.ndarray):
             state = torch.from_numpy(state)
-        max_values, actions, scores, indexes, keys = self.model.predict(state)  # TODO: make the ordering of action, value consistent
+        # inference = self.try_greedy_infer(state)
+        max_values, actions, indexes, scores, keys = self.model.predict(state)  # TODO: make the ordering of action, value consistent
         extra = {'scores': scores, 'indexes': indexes, 'keys': keys}
+        # if inference is not None:
+        #     actions, max_values, extra = inference
         return actions, max_values, extra  # return scale values of action and value. extra term is a dict containing additional values for reference
 
     def epsilon_greedy_infer(self, state):
+        random_actions = torch.tensor([[random.randrange(self.output_dim)]], dtype=torch.long)
         actions, values, extra = self.greedy_infer(state)
         random_number = random.random()
-        # print('random_number: {} epsilon: {}'.format(random_number, self.epsilon))
+
         if random_number < self.epsilon:
-            actions = torch.tensor([[random.randrange(self.output_dim)]], dtype=torch.long)
+            actions = random_actions
+
         return actions, values, extra
 
     def epsilon_decay(self):
@@ -211,8 +271,11 @@ class NECAgent:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', '-n', type=str)
+    parser.add_argument('--render', action='store_true', help='render gym')
+
     args = parser.parse_args()
     experiment_name = args.name
+    is_render = args.render
 
     HYPARAMS = load_json('./hyparams/nec_hyparams.json')[experiment_name]['hyparams']
     logger.debug('experiment_name: {} hyparams: {}'.format(experiment_name, HYPARAMS))
@@ -226,7 +289,6 @@ def main():
     if not os.path.exists(tensorboard_logdir):
         os.mkdir(tensorboard_logdir)
     writer = TensorboardLogger(logdir=tensorboard_logdir)
-
     env = gym.make('CartPole-v0')
     agent = NECAgent(
         input_dim=env.observation_space.shape[0],
@@ -255,35 +317,56 @@ def main():
         step = 0
         rewards = deque(maxlen=HYPARAMS['n_step_reward'])
         while True:
-            if agent.model.dnd.is_ready():  # TMEP: add a new method for agent to get the status of dnd
-                state_tensor = torch.from_numpy(state).float().unsqueeze(0)
-                action_tensor, value_tensor, extra = agent.epsilon_greedy_infer(state_tensor)
-                if global_steps > HYPARAMS['warmup_steps']:
-                    # if training starts, use the action from the agent and decay the epsilon
-                    action = action_tensor.item()
-                    agent.epsilon_decay()
-                logger.debug('episode: {} global_steps: {} value: {} action: {} state: {} epsilon: {}'.format(episode, global_steps, value_tensor.item(), action, state, agent.epsilon))
+            if is_render:
+                env.render()
+            # if agent.model.dnd.is_ready():  # TMEP: add a new method for agent to get the status of dnd
+            state_tensor = torch.from_numpy(state).float().unsqueeze(0)
+            
+            # TEMP: fucking ugly
+            indexes = None
+            scores = None
+
+            if not agent.model.dnd.is_ready():
+                keys = agent.encode(state)
+                action_tensor = torch.tensor([[env.action_space.sample()]], dtype=torch.long)
+                value_tensor = torch.tensor([[0.0]], dtype=torch.float)
             else:
+                action_tensor, value_tensor, extra = agent.epsilon_greedy_infer(state_tensor)
+                keys = extra['keys']
+                indexes = extra['indexes'][0]
+                scores = extra['scores'][0]
+
+            if global_steps > HYPARAMS['warmup_steps']:
+                # if training starts, use the action from the agent and decay the epsilon
+                agent.epsilon_decay()
+
+            action = action_tensor.item()
+            logger.debug('episode: {} global_steps: {} value: {} action: {} state: {} epsilon: {}'.format(episode, global_steps, value_tensor.item(), action, state, agent.epsilon))
+            # else:
                 # otherwise, just use a random action
-                action = env.action_space.sample()
+            action = env.action_space.sample()
             next_state, reward, done, _ = env.step(action)
             
             ###################
             # cache rewards for getting n-step q 
             rewards.append(reward)
-            if len(rewards) == HYPARAMS['n_step_reward'] and agent.model.dnd.is_ready():
+            if len(rewards) == HYPARAMS['n_step_reward']:
                 if done:
-                    q_target = np.dot(np.array(rewards) * gamma_vector)
+                    q_target = np.dot(np.array(rewards), gamma_vector)
                 else:
                     max_q = agent.get_max_q()  # use the maximum q to bootstrap the term max Q(s_t+N, a')
                     assert isinstance(max_q, float)
-                    q_target = np.dot(np.array(rewards) * gamma_vector) + HYPARAMS['gamma']**HYPARAMS['n_step_reward'] * max_q 
+                    q_target = np.dot(np.array(rewards), gamma_vector) + HYPARAMS['gamma']**HYPARAMS['n_step_reward'] * max_q 
 
                 agent.remember(state, q_target, action)  # save to replay buffer
                 # reminder: q_target will plays the role of the target network in DQN
 
                 agent.commit_single_to_dnd(
-                    action, extra['key'], extra['index'], extra['score'], q_target  # reminder: store the Q_TARGET for value estimate
+                    action=action,
+                    key=keys,
+                    value=torch.tensor(q_target, dtype=torch.float),  # reminder: store the Q_TARGET for value estimate
+                    index=indexes[0] if indexes is not None else indexes,
+                    score=scores[0] if scores is not None else scores,
                 )
             ###################
 
@@ -299,20 +382,17 @@ def main():
             state = next_state
 
             # TODO: add logic for experience replay
-            # if global_steps / HYPARAMS['horizon'] > HYPARAMS['batch_size']:
-            #     agent.replay(batch_size=HYPARAMS['batch_size'])
+            logger.debug('episode: {} global_steps: {} length_of_replay_buffer: {} dnd.is_ready: {}'.format(episode, global_steps, len(agent.replay_buffer), agent.model.dnd.is_ready()))
+            if global_steps > HYPARAMS['warmup_steps'] and len(agent.replay_buffer) >= HYPARAMS['batch_size']:
+                print('global_steps: {} | experience replay!'.format(global_steps))
+                agent.replay(batch_size=HYPARAMS['batch_size'])
             
-            # if done:
-            #     # update dnd
-            #     writer.log_episode(episode + 1, counter)
-            #     logger.info('episode done! episode: {} score: {}'.format(episode, counter))
-            #     logger.debug('dnd[0] len: {}'.format(len(agent.dnd_list[0])))
-            #     logger.debug('dnd[1] len: {}'.format(len(agent.dnd_list[1])))
-            #     break
-        
         # At the end of each episode
-        agent.push_to_dnd()  # push the updates to dnd
-        
+        logger.debug('cache_for_dnd: {}'.format(len(agent.cache_for_dnd['actions'])))
+        if len(agent.cache_for_dnd['actions']) > 0:
+            agent.push_to_dnd()  # push the updates to dnd
+            agent.write_dnd()  # write to search_engine
+            print(f'end of episode {episode}')
 
 if __name__ == '__main__':
     main()
