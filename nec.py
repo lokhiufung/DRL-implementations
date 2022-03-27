@@ -344,7 +344,7 @@ def main():
             logger.debug('episode: {} global_steps: {} value: {} action: {} state: {} epsilon: {}'.format(episode, global_steps, value_tensor.item(), action, state, agent.epsilon))
             # else:
                 # otherwise, just use a random action
-            action = env.action_space.sample()
+            # action = env.action_space.sample()
             next_state, reward, done, _ = env.step(action)
             
             ###################
@@ -357,7 +357,7 @@ def main():
                     max_q = agent.get_max_q()  # use the maximum q to bootstrap the term max Q(s_t+N, a')
                     assert isinstance(max_q, float)
                     q_target = np.dot(np.array(rewards), gamma_vector) + HYPARAMS['gamma']**HYPARAMS['n_step_reward'] * max_q 
-
+                # TODO: should use a state n step before
                 agent.remember(state, q_target, action)  # save to replay buffer
                 # reminder: q_target will plays the role of the target network in DQN
 

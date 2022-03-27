@@ -44,8 +44,8 @@ def main():
     batch_size = hyparams['batch_size']
     replay_freq = hyparams['replay_freq']
     target_update_freq = hyparams['target_update_freq'] 
-    episodes = hyparams['episodes']
-    warmup_steps = hyparams['warmup_steps']
+    episodes = hyparams['n_episodes']
+    warmup_steps = hyparams['n_warmup_steps']
     # max_steps = 1e10
     logger.debug('experiment_name: {} hyparams: {}'.format(experiment_name, hyparams))
 

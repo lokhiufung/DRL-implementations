@@ -1,46 +1,55 @@
-import collections
+from typing import Tuple
+from collections import namedtuple, deque
+
+import numpy as np
 
 
-__all__ = ['Transition', 'TransitionBuffer']
-
-
-Transition = collections.namedtuple(
-    'Transition',
-    ['state', 'reward', 'next_state', 'action', 'done'],
+Transition = namedtuple(
+    'Transition', [
+        'state',
+        'action',
+        'reward',
+        'next_state',
+        'done',
+    ]
 )
 
+class TransitionHistory:
+    def __init__(self, n_transitions):
+        self.n_transitions = n_transitions
+        self.transitions = deque(maxlen=self.n_transitions)
 
-class TransitionBuffer(collections.UserList):
-    # @property
-    # def transition(self):
+    def __len__(self):
+        return len(self.transitions)
 
-    #     if len(self.buffer) >= self.n_steps:
-    #         reward = 0.0
-    #         for i, transition in enumerate(self.transitions_buffer):
-    #             if not transition.done:
-    #                 reward += self.gamma**i * transition.reward
-    #             else:
-    #                 break
-    #         return Transition(
-    #             state=self.buffer[0].state,
-    #             reward=reward,
-    #             next_state=self.buffer[0].next_state,
-    #             action=self.buffer[0].action,
-    #             done=self.buffer[0].done,
-    #         )
-    #     else:
-    #         return None
-    def __init__(self):
-        super().__init__()
+    def __getitem__(self, idx):
+        return list(self.transitions)[idx]
         
-    def write_to_buffer(self, state, reward, next_state, action, done):
-        self.data.append(Transition(
-            state=state,
-            reward=reward,
-            next_state=next_state,
-            action=action,
-            done=done,
-        ))        
+    def get_rewards(self):
+        rewards = [transition.reward for transition in self.transitions]
+        return rewards
 
-    def clean(self):
-        self.data = []
+    def get_transitions(self):
+        return self.transitions
+    
+    def get_state_action_rewards(self) -> Tuple[np.ndarray, list]:
+        """return the state and the rewards collected since the state
+        """
+        transitions = list(self.transitions)
+        state = transitions[0].state
+        action = transitions[0].action
+        rewards = self.get_rewards()
+        return state, action, rewards
+
+    def check_done(self):
+        transitions = list(self.transitions)
+        done = transitions[-1].done
+        return done
+
+    def append(self, state, action, reward, next_state, done):
+        transition = Transition(state, action, reward, next_state, done)
+        self.transitions.append(transition)
+    
+    def reset(self):
+        # reset all the transitions (i.e at the beginning of each episode)
+        self.transitions = deque(maxlen=self.n_transitions)
