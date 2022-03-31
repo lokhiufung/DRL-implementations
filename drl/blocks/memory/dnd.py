@@ -108,27 +108,21 @@ class DifferentiableNeuralDictionary(nn.Module):
     def write_to_buffer(self, action, key, value):
         self.dnds[action].write_to_buffer(key, value)
 
-    def update_to_buffer(self, actions, keys: List[torch.Tensor], indexes: List[List[int]], scores: List[List[float]], values: List[float]):
+    def update_to_buffer(self, actions, keys: List[torch.Tensor], values: List[float]):
         action_group = {}
         for i, action in enumerate(actions):
             if action not in action_group:
                 action_group[action] = {}
                 action_group[action]['values'] = []
-                action_group[action]['indexes'] = []
                 action_group[action]['keys'] = []
-                action_group[action]['scores'] = []
                 
             action_group[action]['values'].append(values[i])
-            action_group[action]['indexes'].append(indexes[i])
             action_group[action]['keys'].append(keys[i])
-            action_group[action]['scores'].append(scores[i])
 
         for action, group in action_group.items():
             self.dnds[action].update_to_buffer(
-                indexes=group['indexes'],
-                values=group['values'],
                 keys=group['keys'],
-                scores=group['scores'],
+                values=group['values'],
             )
     
     def get_max_value(self):
@@ -137,6 +131,8 @@ class DifferentiableNeuralDictionary(nn.Module):
         if self.is_ready():
             max_values = [dnd.get_max_value() for dnd in self.dnds]
             max_value = max(max_values)
+        else:
+            max_value = torch.tensor([[0.0]], dtype=torch.float)
         return max_value
 
     def is_ready(self):
@@ -271,12 +267,18 @@ class _DifferentiableNeuralDictionary(nn.Module):
         self.key_buffer.append(key)
         self.value_buffer.append(value)
 
-    def update_to_buffer(self, keys: List[torch.Tensor], indexes: List[List[int]], scores: List[List[float]], values: List[float]):
-        for key, index, score, value in zip(keys, indexes, scores, values):
-            if max(score) > self.score_threshold:
+    def update_to_buffer(self, keys: List[torch.Tensor], values: List[float]):
+        for key, value in zip(keys, values):
+
+            value_prev, closest_idx, score = self.lookup(key)
+
+            score = max(score[0]).item()  # reminder: score is a tensor
+            closest_idx = closest_idx[0][0] 
+            if score > self.score_threshold:  
                 # if the index is already in dnd, update it using q update
-                closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score 
-                self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])
+                # closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score
+                
+                self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])  # TODO: in-place operation is not allowed for Variable that requires grad
             else:
                 # else just write to the buffer
                 self.write_to_buffer(key, value)

@@ -5,18 +5,14 @@
             "gamma": 0.99,
             "epsilon_start": 1.0,
             "epsilon_end": 0.1,
-            "decay_factor": 100.0,
+            "decay_factor": 20000,
             "buffer_size": 10000,
             "batch_size": 32,
             "n_step_reward": 1,
             "learn_per_step": 4,
-            "update_target_per_step": 40000,
-            "n_warmup_steps": 50000,
-            "n_episodes": 5000000,
-
-            "replay_freq": 1,
-            "target_update_freq": 100
-            
+            "update_target_per_step": 400,
+            "n_warmup_steps": 50,
+            "n_episodes": 5000
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"
     }

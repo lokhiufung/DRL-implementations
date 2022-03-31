@@ -30,7 +30,7 @@ class TensorboardLogger(SummaryWriter):
     #     for key, value in train_data.items():
     #         self.add_image(key, , global_step=steps, dataformats='HWC')
 
-    # def log_episode(self, episode, score, avg_loss=None):
-    #     self.add_scalar('Episode/score', score, episode)
-    #     if avg_loss:
-    #         self.add_scalar('Episode/avg_loss', avg_loss, episode)
+    def log_episode(self, episode, score, avg_loss=None):
+        self.add_scalar('Episode/score', score, episode)
+        if avg_loss:
+            self.add_scalar('Episode/avg_loss', avg_loss, episode)

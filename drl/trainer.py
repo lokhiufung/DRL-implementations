@@ -39,9 +39,12 @@ class Trainer:
         history = TransitionHistory(n_transitions=n_step_reward)
         
         if self.writer is not None:
-            self.env.reset()
-            state, _, _, _ = self.env.step(self.env.action_space.sample()) # take a random action to start with
-            self.writer.add_graph(agent.model, torch.tensor([state], dtype=torch.float32))  # add model graph to tensorboard
+            try:
+                self.env.reset()
+                state, _, _, _ = self.env.step(self.env.action_space.sample()) # take a random action to start with
+                self.writer.add_graph(agent.model, torch.tensor([state], dtype=torch.float32))  # add model graph to tensorboard
+            except:
+                logger.error('Writer cannot write computational graph.')
 
         if isinstance(agent, ValueBasedAgent):
             agent_type = AgentType.VALUE_BASED
@@ -54,7 +57,7 @@ class Trainer:
             history.reset()
             steps = 0
             episode_scores = 0
-            logger.info('start of episode={} length of history={} steps={}'.format(episode+1, len(history), steps))
+            logger.debug('start of episode={} length of history={} steps={}'.format(episode+1, len(history), steps))
             while True:
                 if is_render:
                     self.env.render()
@@ -96,7 +99,7 @@ class Trainer:
                 steps += 1
                 episode_scores += reward
 
-                if self.global_steps % agent.learn_per_step and agent.is_ready_to_learn() and self.global_steps > agent.n_warmup_steps:
+                if self.global_steps % agent.learn_per_step == 0 and agent.is_ready_to_learn() and self.global_steps > agent.n_warmup_steps:
                     agent.backprop(global_steps=self.global_steps, writer=self.writer)
 
                 agent.call_end_of_step(global_steps=self.global_steps, steps=steps, writer=self.writer)

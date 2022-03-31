@@ -1,9 +1,10 @@
 import argparse
 
 import gym
+from torch import embedding
 
 from drl.trainer import Trainer
-from drl.agents.dqn_agent import DQNAgent
+from drl.agents.nec_agent import NECAgent
 from drl.utils import load_json
 
 
@@ -21,10 +22,10 @@ def main():
     experiment_name = args.name
     is_render = args.render
 
-    hyparams = load_json('./hyparams/dqn_hyparams.json')[experiment_name]['hyparams']
+    hyparams = load_json('./hyparams/nec_hyparams.json')[experiment_name]['hyparams']
     
     env = gym.make('CartPole-v0')
-    agent = DQNAgent(
+    agent = NECAgent(
         input_dim=env.observation_space.shape[0],
         output_dim=env.action_space.n,
         lr=hyparams['lr'],
@@ -36,8 +37,13 @@ def main():
         batch_size=hyparams['batch_size'],
         n_step_reward=hyparams['n_step_reward'],
         learn_per_step=hyparams['learn_per_step'],
-        update_target_per_step=hyparams['update_target_per_step'],
         n_warmup_steps=hyparams['n_warmup_steps'],
+        embedding_dim=hyparams['embedding_dim'],
+        p=hyparams['p'],
+        similarity_threshold=hyparams['similarity_threshold'],
+        alpha=hyparams['alpha'],
+        mode='train',
+        writer=None,
     )
     trainer = Trainer(
         experiment_name=experiment_name,

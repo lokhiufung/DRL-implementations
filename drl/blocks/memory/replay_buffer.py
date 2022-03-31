@@ -21,7 +21,7 @@ class ReplayBuffer(nn.Module):
         return len(self.buffer)
 
     def append(self, state, reward, next_state, action, done):
-        self.buffer.append(self.output_type(state, reward, next_state, action, done))
+        self.buffer.append(self.output_type(state, action, reward, next_state, done))
 
     def get_batch(self, batch_size):
         """ Get randomly batched samples"""
@@ -72,7 +72,7 @@ class ReplayBuffer(nn.Module):
 
 class NECReplayBuffer(ReplayBuffer):
     
-    OUTPUT_TYPE = collections.namedtuple(
+    output_type = collections.namedtuple(
         'Transition',
         ['state', 'q_target', 'action'],
     )

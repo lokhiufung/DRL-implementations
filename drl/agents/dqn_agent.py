@@ -71,7 +71,9 @@ class DQNAgent(ValueBasedAgent):
         mode='train',
         writer=None
     ):
-        super().__init__(input_dim, output_dim, lr, gamma, epsilon_start, epsilon_end, decay_factor, buffer_size, batch_size, n_step_reward, learn_per_step, update_target_per_step, n_warmup_steps, mode, writer)
+        super().__init__(input_dim, output_dim, lr, gamma, epsilon_start, epsilon_end, decay_factor, buffer_size, batch_size, n_step_reward, learn_per_step, n_warmup_steps, mode, writer)
+
+        self.update_target_per_step = update_target_per_step
 
         self.replay_buffer = ReplayBuffer(capacity=self.buffer_size)
         self.model = QNetwork(self.input_dim, self.output_dim)
@@ -117,7 +119,7 @@ class DQNAgent(ValueBasedAgent):
         return action, value
 
     def remember(self, state, reward, action, next_state, done):
-        self.replay_buffer.append(state, reward, action, next_state, done)
+        self.replay_buffer.append(state, reward, next_state, action, done)
 
     def update_target_network(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -136,9 +138,10 @@ class DQNAgent(ValueBasedAgent):
     def call_end_of_step(self, global_steps, steps, writer=None):
         super().call_end_of_step(global_steps, steps, writer)
 
-        if global_steps % self.update_target_per_step and self.n_grad_steps > 0 and global_steps > self.n_warmup_steps:  # start updating the target model only after 1 grad step
+        if global_steps % self.update_target_per_step == 0 and self.n_grad_steps > 0:  # start updating the target model only after 1 grad step
             self.update_target_network()
-
+        
+        logger.debug('self.n_target_updates: {} | self.n_grad_steps: {}'.format(self.n_target_updates, self.n_grad_steps))
         if writer is not None:
             if self.n_grad_steps > 0:
                 writer.log_scalar(
@@ -159,4 +162,5 @@ class DQNAgent(ValueBasedAgent):
                     'episode/percentage usage of buffer': len(self.replay_buffer) / self.replay_buffer.capacity
                 }
             )
-        
+        if episode % 10 == 0 and episode != 0:
+            self.save_network()

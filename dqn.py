@@ -42,8 +42,10 @@ def main():
     epsilon_end = hyparams['epsilon_end']
     decay_factor = hyparams['decay_factor']
     batch_size = hyparams['batch_size']
-    replay_freq = hyparams['replay_freq']
-    target_update_freq = hyparams['target_update_freq'] 
+    # replay_freq = hyparams['replay_freq']
+    replay_freq = hyparams['learn_per_step']
+    # target_update_freq = hyparams['target_update_freq'] 
+    target_update_freq = hyparams['update_target_per_step'] 
     episodes = hyparams['n_episodes']
     warmup_steps = hyparams['n_warmup_steps']
     # max_steps = 1e10
