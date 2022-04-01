@@ -11,7 +11,7 @@
             "n_step_reward": 1,
             "learn_per_step": 4,
             "update_target_per_step": 400,
-            "n_warmup_steps": 50,
+            "n_warmup_steps": 1000,
             "n_episodes": 5000
         },
         "remarks": "training_time: /, loss_converge: False, target_value_exploded: True, policy_value_exploded: True"

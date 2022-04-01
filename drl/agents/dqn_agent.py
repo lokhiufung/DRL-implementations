@@ -162,5 +162,5 @@ class DQNAgent(ValueBasedAgent):
                     'episode/percentage usage of buffer': len(self.replay_buffer) / self.replay_buffer.capacity
                 }
             )
-        if episode % 10 == 0 and episode != 0:
-            self.save_network()
+        # if episode % 10 == 0 and episode != 0:
+        #     self.save_network()
