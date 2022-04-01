@@ -277,8 +277,8 @@ class _DifferentiableNeuralDictionary(nn.Module):
             if score > self.score_threshold:  
                 # if the index is already in dnd, update it using q update
                 # closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score
-                
-                self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])  # TODO: in-place operation is not allowed for Variable that requires grad
+                with torch.no_grad():  # reminder: in-place operation is not allowed for Variable that requires grad
+                    self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])
             else:
                 # else just write to the buffer
                 self.write_to_buffer(key, value)

@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import optim
 import numpy as np
 
 from drl.core.agent import ValueBasedAgent
@@ -117,6 +118,8 @@ class NECAgent(ValueBasedAgent):
             p=self.p
         )
 
+        self.optimizer = optim.RMSprop(self.model.parameters(), lr=self.lr)
+
         self.cache_for_dnd = None
         self._reset_cache_for_dnd()
 
@@ -150,15 +153,13 @@ class NECAgent(ValueBasedAgent):
         # extra = {'scores': scores, 'indexes': indexes, 'keys': keys}
         return actions, max_values# return scale values of action and value. extra term is a dict containing additional values for reference
 
-    def learn(self, batch_size):
-
-        # TODO: check the replay logic
-        batch = self.replay_buffer.get_batch(batch_size)
+    def learn(self):
+        batch = self.replay_buffer.get_batch(self.batch_size)
 
         # reminder: make sure to cast to float before creating the computation graph
-        states = torch.tensor([batch[i].state for i in range(batch_size)]).float()
-        actions = torch.tensor([batch[i].action for i in range(batch_size)]).long()
-        q_targets = torch.tensor([batch[i].q_target for i in range(batch_size)]).float()
+        states = torch.tensor([batch[i].state for i in range(self.batch_size)]).float()
+        actions = torch.tensor([batch[i].action for i in range(self.batch_size)]).long()
+        q_targets = torch.tensor([batch[i].q_target for i in range(self.batch_size)]).float()
 
         qs, _, _, _, _ = self.model(states, return_all_values=True)
         

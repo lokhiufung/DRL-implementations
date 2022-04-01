@@ -188,7 +188,6 @@ class NECAgent:
 
     def replay(self, batch_size):
         if self.model.dnd.is_ready():
-            # TODO: check the replay logic
             batch = self.replay_buffer.get_batch(batch_size)
 
             # reminder: make sure to cast to float before creating the computation graph
@@ -381,7 +380,6 @@ def main():
                 break
             state = next_state
 
-            # TODO: add logic for experience replay
             logger.debug('episode: {} global_steps: {} length_of_replay_buffer: {} dnd.is_ready: {}'.format(episode, global_steps, len(agent.replay_buffer), agent.model.dnd.is_ready()))
             if global_steps > HYPARAMS['warmup_steps'] and len(agent.replay_buffer) >= HYPARAMS['batch_size']:
                 print('global_steps: {} | experience replay!'.format(global_steps))
