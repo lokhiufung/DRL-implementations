@@ -23,7 +23,8 @@ def main():
 
     hyparams = load_json('./hyparams/dqn_hyparams.json')[experiment_name]['hyparams']
     
-    env = gym.make('CartPole-v0')
+    # env = gym.make('CartPole-v0')
+    env = gym.make('LunarLander-v2')
     agent = DQNAgent(
         input_dim=env.observation_space.shape[0],
         output_dim=env.action_space.n,
