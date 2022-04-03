@@ -5,7 +5,7 @@
             "gamma": 0.99,
             "epsilon_start": 1.0,
             "epsilon_end": 0.1,
-            "decay_factor": 20000,
+            "decay_factor": 2000,
             "buffer_size": 10000,
             "batch_size": 32,
             "n_step_reward": 1,

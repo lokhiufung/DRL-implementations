@@ -162,5 +162,11 @@ class DQNAgent(ValueBasedAgent):
                     'episode/percentage usage of buffer': len(self.replay_buffer) / self.replay_buffer.capacity
                 }
             )
-        if episode % 10 == 0 and episode != 0:
-            self.save_network()
+
+    def save_checkpoint(self, filepath):
+        torch.save({
+            'model': self.model.state_dict(),
+            'target_model': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+        }, filepath,
+        )

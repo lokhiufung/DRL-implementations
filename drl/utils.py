@@ -1,7 +1,7 @@
 import json
 import yaml
-import json
 import logging
+import math
 from logging import FileHandler, StreamHandler, Formatter
 import os
 
@@ -52,3 +52,14 @@ def load_yaml(filepath):
 def name_import(name):
     module_class = import_module(name)
     return module_class
+
+
+def compare_weights(model1, model2):
+    for param1, param2 in zip(model1.parameters(), model2.parameters()):
+        if param1.data.ne(param2.data).sum() > 0:
+            return False
+    return True
+
+
+def sigmoid_clipping(x, beta=1.0):
+    return 1 / (1 + math.exp(-beta * x))

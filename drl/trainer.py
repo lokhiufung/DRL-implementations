@@ -1,5 +1,6 @@
 import os
 
+import math
 import torch
 import gym
 
@@ -7,7 +8,7 @@ from drl.core.agent import ValueBasedAgent
 from drl.core.transition import TransitionHistory
 from drl.core.types import AgentType
 from drl.utils import get_logger
-from tensorboard_logger import TensorboardLogger
+from drl.tensorboard_logger import TensorboardLogger
 
 
 logger = get_logger(__name__, fh_lv='debug', ch_lv='info')
@@ -26,6 +27,10 @@ class Trainer:
                 logdir=self.tensorboard_logdir
             )
             
+            self.checkpoint_dir = os.path.join(self.experiment_logdir, 'checkpoint')
+            if not os.path.exists(self.checkpoint_dir):
+                os.mkdir(self.checkpoint_dir)
+                
         if isinstance(env, str):
             self.env = gym.make(env)
         else:
@@ -51,6 +56,7 @@ class Trainer:
         else:
             raise Exception('Currently only support value based agent.')
         
+        highest_score = -math.inf
         logger.debug('Start training! n_episodes={} n_warmup_steps={}'.format(n_episodes, agent.n_warmup_steps))
         for episode in range(n_episodes):
             state = self.env.reset()
@@ -116,6 +122,26 @@ class Trainer:
                         'episode/episode_scores': episode_scores
                     }
                 )
+            
+            ckpt_filepath = os.path.join(self.checkpoint_dir, 'ckpt_steps={}_score={}'.format(self.global_steps, episode_scores))
+            if episode_scores >= highest_score and self.global_steps > agent.n_warmup_steps:
+                # save checkpoints
+                checkpoint_filenames = os.listdir(self.checkpoint_dir) 
+                # maintain the maximum number of checkpoints to 3
+                # remvoe the oldest ckpt
+                # add a new checkpoint of the score is higher or equal to the current best model
+                if len(checkpoint_filenames) == 3:
+                    oldest_filename = None
+                    smallest_ckpt_steps = math.inf
+                    for filename in checkpoint_filenames:
+                        ckpt_steps = int(filename.split('_')[1].split('=')[1])
+                        if oldest_filename is None or ckpt_steps < smallest_ckpt_steps:
+                            oldest_filename = filename
+                            smallest_ckpt_steps = ckpt_steps
+                    os.remove(os.path.join(self.checkpoint_dir, oldest_filename))
+
+                agent.save_checkpoint(filepath=ckpt_filepath)
+
             logger.info('end of episode={} episode_scores={}'.format(episode+1, episode_scores))
         
         self.env.close()
