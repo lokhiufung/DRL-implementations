@@ -29,7 +29,7 @@ class BaseAgent(ABC):
     def hyparams_info(self):
         return self.HYPARAMS_INFO
 
-    def save_checkpoint(self, output_dir):
+    def save_checkpoint(self, filepath):
         raise NotImplementedError
     
     def save_network(self, output_dir):

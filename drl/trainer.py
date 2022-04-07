@@ -99,6 +99,7 @@ class Trainer:
                     agent.call_after_n_step_reward(
                         global_steps=self.global_steps, 
                         history=history,
+                        writer=self.writer,
                     )
                 
                 self.global_steps += 1
@@ -123,7 +124,7 @@ class Trainer:
                     }
                 )
             
-            ckpt_filepath = os.path.join(self.checkpoint_dir, 'ckpt_steps={}_score={}'.format(self.global_steps, episode_scores))
+            ckpt_filepath = os.path.join(self.checkpoint_dir, 'ckpt_steps={}_score={}.ckpt'.format(self.global_steps, episode_scores))
             if episode_scores >= highest_score and self.global_steps > agent.n_warmup_steps:
                 # save checkpoints
                 checkpoint_filenames = os.listdir(self.checkpoint_dir) 
@@ -134,7 +135,7 @@ class Trainer:
                     oldest_filename = None
                     smallest_ckpt_steps = math.inf
                     for filename in checkpoint_filenames:
-                        ckpt_steps = int(filename.split('_')[1].split('=')[1])
+                        ckpt_steps = int(filename.replace('.ckpt', '').split('_')[1].split('=')[1])
                         if oldest_filename is None or ckpt_steps < smallest_ckpt_steps:
                             oldest_filename = filename
                             smallest_ckpt_steps = ckpt_steps

@@ -219,27 +219,18 @@ class NECAgent(ValueBasedAgent):
         max_q = self.model.dnd.get_max_value()
         return max_q
 
-    def save_checkpoint(self, output_dir):
+    def save_checkpoint(self, filepath):
         """
         save checkpoint for restore training
         """
         torch.save({
             'model_state_dict': self.model.state_dict(),
-            'target_model_state_dict': self.target_model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict()
-        }, os.path.join(output_dir, 'checkpoint_{}'.format(self.steps_done)))
+        }, filepath)
 
-    # def save_network(self, output_dir):
-    #     """
-    #     save checkpoint for restore training
-    #     """
-    #     torch.save({
-    #         'model_state_dict': self.model.state_dict(),
-    #         'target_model_state_dict': self.target_model.state_dict()
-    #     })
+    def call_after_n_step_reward(self, global_steps, history, writer):
+        super().call_after_n_step_reward(global_steps, history, writer)
 
-    def call_after_n_step_reward(self, global_steps, history):
-        
         state, action, rewards = history.get_state_action_rewards()
         n_step_reward = len(history)
 
@@ -264,3 +255,20 @@ class NECAgent(ValueBasedAgent):
         if len(self.cache_for_dnd['actions']) > 0:
             self.push_to_dnd()  # push the updates to dnd
             self.write_dnd()  # write to search_engine
+
+        if writer is not None:
+            writer.log_scalar(
+                iteration=episode,
+                train_data={
+                    'episode/percentage usage of buffer': len(self.replay_buffer) / self.replay_buffer.capacity
+                }
+            )
+
+            for action in range(self.output_dim):
+                writer.log_scalar(
+                    iteration=episode,
+                    train_data={
+                        f'episode/percentage usage of dnd[{action}]': self.model.dnd.get_len(action) / self.model.dnd.capacity
+                    }
+                )
+            

@@ -1,7 +1,6 @@
 import argparse
 
 import gym
-from torch import embedding
 
 from drl.trainer import Trainer
 from drl.agents.nec_agent import NECAgent

@@ -22,7 +22,7 @@ class DifferentiableNeuralDictionary(nn.Module):
         n_neighbors: int=50,
         n_trees: int=10,
         delta: float=1e-3,
-        score_threshold: float=0.5,
+        score_threshold: float=1e-3,  # reminder: from 0 to 2, the smaller, the closer
         alpha: float=1.0,
     ):
         super().__init__()
@@ -50,6 +50,9 @@ class DifferentiableNeuralDictionary(nn.Module):
                 alpha=self.alpha,
             ))
         self.dnds = nn.ModuleList(self.dnds)
+
+    def get_len(self, action):
+        return len(self.dnds[action])
 
     def lookup(
         self,
@@ -174,6 +177,9 @@ class _DifferentiableNeuralDictionary(nn.Module):
 
         self.search_engine = None  # will be initialized after getting samples in buffer
 
+    def __len__(self):
+        return len(self.keys)
+
     def is_ready(self):
         # check if there is the search_engine 
         return True if self.search_engine is not None else False
@@ -210,8 +216,9 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 retrieved_scores.append(torch.tensor(distances, dtype=torch.float32))
 
                 # update indexes last visit time
+                visit_time = time.perf_counter()
                 for index in indexes:
-                    self.last_visit_time[index] = time.perf_counter()
+                    self.last_visit_time[index] = visit_time
 
             retrieved_keys = torch.cat(retrieved_keys, dim=0)
             retrieved_values = torch.cat(retrieved_values, dim=0)
@@ -255,9 +262,9 @@ class _DifferentiableNeuralDictionary(nn.Module):
         # when reached the max capacity, remove the oldest index before writing to the buffer
         if len(self.key_buffer) >= self.capacity:
             oldest_index = None
-            largest_visit_time = -1.0  # initialize visit time 
+            smallest_visit_time = np.inf  # initialize visit time 
             for index, last_visit_time in self.last_visit_time.items():
-                if last_visit_time > largest_visit_time:
+                if last_visit_time < smallest_visit_time:  # reminder: the older the smaller last visit_time
                     oldest_index = index
             
             # remove the oldest index
@@ -271,14 +278,17 @@ class _DifferentiableNeuralDictionary(nn.Module):
         for key, value in zip(keys, values):
 
             value_prev, closest_idx, score = self.lookup(key)
-
-            score = max(score[0]).item()  # reminder: score is a tensor
+            
+            # score_ = score  # TODO
+            score = min(score[0]).item()  # reminder: score is a tensor. The lower, the closer
             closest_idx = closest_idx[0][0] 
-            if score > self.score_threshold:  
+            if score < self.score_threshold:  # TODO: change all score to distance or convert the distance to score
+                # print('update_to_buffer() score: {} score_: {}'.format(score, score_))
                 # if the index is already in dnd, update it using q update
                 # closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score
                 with torch.no_grad():  # reminder: in-place operation is not allowed for Variable that requires grad
                     self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])
+                
             else:
                 # else just write to the buffer
                 self.write_to_buffer(key, value)
