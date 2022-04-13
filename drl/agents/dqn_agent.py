@@ -125,7 +125,7 @@ class DQNAgent(ValueBasedAgent):
         self.target_model.load_state_dict(self.model.state_dict())
         self.n_target_updates += 1
 
-    def call_after_n_step_reward(self, global_steps, history):
+    def call_after_n_step_reward(self, global_steps, history, writer=None):
         transition = history[0]
         self.remember(
             state=transition.state,
@@ -170,3 +170,10 @@ class DQNAgent(ValueBasedAgent):
             'optimizer': self.optimizer.state_dict(),
         }, filepath,
         )
+
+    def load_checkpoint(self, filepath):
+        checkpoint = torch.load(filepath)
+        self.model.load_state_dict(checkpoint['model'])
+        self.target_model.load_state_dict(checkpoint['target_model'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+

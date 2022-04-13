@@ -5,6 +5,7 @@ import gym
 from drl.trainer import Trainer
 from drl.agents.dqn_agent import DQNAgent
 from drl.utils import load_json
+from drl.reward_scalers.simple_scaler import SimpleScaler
 
 
 def parser_args():

@@ -14,7 +14,7 @@
             "n_warmup_steps": 1000,
             "embedding_dim": 32,
             "p": 50,
-            "similarity_threshold": 0.001,
+            "similarity_threshold": 0.01,
             "alpha": 1,
             "memory_update_freq": 100,
             "n_episodes": 5000

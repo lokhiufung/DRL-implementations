@@ -51,6 +51,10 @@ class DifferentiableNeuralDictionary(nn.Module):
             ))
         self.dnds = nn.ModuleList(self.dnds)
 
+    def reset(self):
+        for action in range(self.n_actions):
+            self.dnds[action].reset()
+
     def get_len(self, action):
         return len(self.dnds[action])
 
@@ -177,6 +181,17 @@ class _DifferentiableNeuralDictionary(nn.Module):
 
         self.search_engine = None  # will be initialized after getting samples in buffer
 
+    def reset(self):
+        # TODO: not good
+        self.keys = nn.ParameterList([nn.Parameter(torch.from_numpy(key).view(1, -1), requires_grad=True) for key in []])
+        self.values = nn.ParameterList([nn.Parameter(torch.from_numpy(value).view(1, -1), requires_grad=True) for value in []])
+
+        self.key_buffer = []
+        self.value_buffer = []
+        self.last_visit_time = {}  # last visit time indexed by the index
+
+        self.search_engine = None  # will be initialized after getting samples in buffer
+
     def __len__(self):
         return len(self.keys)
 
@@ -274,7 +289,7 @@ class _DifferentiableNeuralDictionary(nn.Module):
         self.key_buffer.append(key)
         self.value_buffer.append(value)
 
-    def update_to_buffer(self, keys: List[torch.Tensor], values: List[float]):
+    def update_to_buffer(self, keys: List[torch.TensorType], values: List[torch.TensorType]):
         for key, value in zip(keys, values):
 
             value_prev, closest_idx, score = self.lookup(key)
@@ -286,8 +301,9 @@ class _DifferentiableNeuralDictionary(nn.Module):
                 # print('update_to_buffer() score: {} score_: {}'.format(score, score_))
                 # if the index is already in dnd, update it using q update
                 # closest_idx = sorted([(idx, sc) for idx, sc in zip(index, score)], key=lambda x: x[1], reverse=True)[0]  # get the index with largest score
-                with torch.no_grad():  # reminder: in-place operation is not allowed for Variable that requires grad
-                    self.values[closest_idx] += self.alpha * (value - self.values[closest_idx])
+                # with torch.no_grad():  # reminder: in-place operation is not allowed for Variable that requires grad
+                # reminder: value is a tensor
+                self.value_buffer[closest_idx] += self.alpha * (value.item() - self.value_buffer[closest_idx])  # TODO: test with this, values -> value_buffer, table update only at write()
                 
             else:
                 # else just write to the buffer

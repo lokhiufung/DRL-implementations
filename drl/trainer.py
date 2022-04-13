@@ -15,10 +15,18 @@ logger = get_logger(__name__, fh_lv='debug', ch_lv='info')
 
 
 class Trainer:
-    def __init__(self, experiment_name, env, experiment_logdir=None):
+    def __init__(self, experiment_name, env, reward_scaler=None, experiment_logdir=None):
         self.experiment_name = experiment_name
         self.experiment_logdir = experiment_logdir
         self.writer = None
+
+        if reward_scaler is not None:
+            self.reward_scaler = reward_scaler
+        else:
+            from drl.reward_scalers.no_scaler import NoScaler
+
+            self.reward_scaler = NoScaler()
+
         if self.experiment_logdir is not None:
             if not os.path.exists(experiment_logdir):
                 os.makedirs(experiment_logdir)
@@ -87,10 +95,12 @@ class Trainer:
                 
                 action = action_tensor.item()
                 next_state, reward, done, _ = self.env.step(action)
+                
+
                 history.append(
                     state=state,
                     action=action,
-                    reward=reward,
+                    reward=self.reward_scaler.scale(reward),  # scaling the reward received
                     next_state=next_state,
                     done=done
                 )

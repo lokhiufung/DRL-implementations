@@ -5,6 +5,8 @@ import math
 import numpy as np
 import torch
 
+from drl.core.types import AgentType
+
 
 class BaseAgent(ABC):
 
@@ -32,6 +34,9 @@ class BaseAgent(ABC):
     def save_checkpoint(self, filepath):
         raise NotImplementedError
     
+    def load_checkpoint(self, filepath):
+        raise NotImplementedError
+        
     def save_network(self, output_dir):
         raise NotImplementedError
 
@@ -122,6 +127,10 @@ class ValueBasedAgent(BaseAgent):
         self.steps_done = 0
 
         self.writer = writer
+
+    @property
+    def agent_type(self):
+        return AgentType.VALUE_BASED
 
     def act(self, state):
         if self.mode == 'train':
