@@ -1,6 +1,5 @@
 import math
 import argparse
-from datasets import is_progress_bar_enabled
 
 import torch
 import gym

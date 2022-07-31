@@ -69,7 +69,8 @@ class DQNAgent(ValueBasedAgent):
         update_target_per_step=10,
         n_warmup_steps=1000,
         mode='train',
-        writer=None
+        writer=None,
+        device='cpu',
     ):
         super().__init__(input_dim, output_dim, lr, gamma, epsilon_start, epsilon_end, decay_factor, buffer_size, batch_size, n_step_reward, learn_per_step, n_warmup_steps, mode, writer)
 
@@ -82,19 +83,29 @@ class DQNAgent(ValueBasedAgent):
         self.optimizer = optim.RMSprop(self.model.parameters(), lr=self.lr)
 
         self.n_target_updates = 0  # counter for target model updates
+        
+        if 'cuda' in device and torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        elif 'mps' in device and torch.backends.mps.is_available():
+            self.device = torch.device('mps')
+        else:
+            self.device = torch.device('cpu') 
+        
+        if 'cpu' not in self.device:
+            self.model.to(self.device)
 
     def learn(self):
         batch = self.replay_buffer.get_batch(self.batch_size)
         #######################
         # process batch to pytorch tensor
         #######################
-        states = torch.tensor([batch[i].state for i in range(self.batch_size)], dtype=torch.float32)
-        rewards = torch.tensor([batch[i].reward for i in range(self.batch_size)], dtype=torch.float32)
-        actions = torch.tensor([batch[i].action for i in range(self.batch_size)], dtype=torch.long).unsqueeze(1)  # actions and states must share the same dimensions
-        next_states = torch.tensor([batch[i].next_state for i in range(self.batch_size)], dtype=torch.float32)
-        dones = torch.tensor([batch[i].done for i in range(self.batch_size)], dtype=torch.bool)
+        states = torch.tensor([batch[i].state for i in range(self.batch_size)], dtype=torch.float32, device=self.device)
+        rewards = torch.tensor([batch[i].reward for i in range(self.batch_size)], dtype=torch.float32, device=self.device)
+        actions = torch.tensor([batch[i].action for i in range(self.batch_size)], dtype=torch.long, device=self.device).unsqueeze(1)  # actions and states must share the same dimensions
+        next_states = torch.tensor([batch[i].next_state for i in range(self.batch_size)], dtype=torch.float32, device=self.device)
+        dones = torch.tensor([batch[i].done for i in range(self.batch_size)], dtype=torch.bool, device=self.device)
         values = self.model(states).gather(1, actions)  # Q_a value with a = argmax~a(Q)
-        next_values = torch.zeros(self.batch_size, dtype=torch.float32)
+        next_values = torch.zeros(self.batch_size, dtype=torch.float32, device=self.device)
         next_values[~dones] = self.target_model(next_states).max(1)[0][~dones].detach()  # detach this node from compution graph for preventing gradient flowing to target network
         expected_next_values = rewards + self.gamma * next_values  # bellman's equation
         loss = F.smooth_l1_loss(values, expected_next_values.unsqueeze(1))  # expand dims to match the output of policy_network

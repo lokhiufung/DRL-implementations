@@ -7,7 +7,9 @@ class RewardScaler(ABC):
 
     def scale(self, reward):
         self._update_estimate(reward)
-        return self._scale(reward)
+        reward = self._scale(reward)
+        self._n += 1
+        return reward
 
     @abstractmethod
     def _scale(self, reward):
